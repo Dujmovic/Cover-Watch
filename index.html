@@ -903,8 +903,8 @@ function render(){
   if(!secs.length)empty='<div class="empty"><strong>No bets yet</strong>Add a bet to start tracking it.</div>';
   const warn=storageOK?'':'<p class="warnbox">This browser is not letting the app save anything, so bets will be lost when you close it. Open the app in a normal (not private) browser window.</p>';
   const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable.<br>'
-    +(real.length?'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Replay demo')+'</button>':'')
-    +(settled.length?(real.length?' · ':'')+'<button type="button" data-a="clearSettled">Clear settled bets</button>':'')+'</p>';
+    +'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Show demo')+'</button>'
+    +(settled.length?' · '+'<button type="button" data-a="clearSettled">Clear settled bets</button>':'')+'</p>';
   const sig=JSON.stringify([secs.map(s=>[s.title,s.note,s.items.map(i=>i.key)]),empty,fine,warn]);
   const main=$('#main');
   const focusSel=focusSelector();
