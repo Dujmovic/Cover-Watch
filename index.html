@@ -265,6 +265,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     <fieldset><legend>Sport</legend><div id="lgPills" class="pills"></div></fieldset>
     <fieldset>
       <legend>Game</legend>
+      <input id="gameFilter" class="txt" type="search" placeholder="Search teams" aria-label="Search games by team" autocomplete="off" style="width:100%;margin-bottom:8px" hidden>
       <div id="gameList" class="games"></div>
       <div id="manualBox" class="manual" hidden>
         <input id="mAway" class="txt" type="text" maxlength="24" placeholder="Away team" aria-label="Away team" autocomplete="off">
@@ -566,7 +567,7 @@ function baseGame(ent){
   if(k.indexOf('feed:')===0){
     const p=k.split(':');const doc=FEED[p[1]];
     const f=doc&&(doc.games||[]).find(x=>String(x.id)===p[2]);
-    if(f)return Object.assign({league:p[1],updatedAt:doc.updatedAt},f);
+    if(f)return Object.assign({league:p[1]},f,{updatedAt:f.u||doc.updatedAt});
     return ent.snap?Object.assign({league:ent.league,status:'pre'},ent.snap):null;
   }
   if(k.indexOf('man:')===0){return S.manual.find(x=>x.id===k.slice(4))||null}
@@ -599,9 +600,9 @@ const ESPN={nfl:['football','nfl',''],cfb:['football','college-football','&group
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());
 const feedState={ok:0,err:'',busy:false};
-function espnUrl(lg,from,to){
+function espnUrl(lg,ds){
   const e=ESPN[lg];
-  return 'https://site.api.espn.com/apis/site/v2/sports/'+e[0]+'/'+e[1]+'/scoreboard?dates='+ymd(from)+'-'+ymd(to)+'&limit=300'+e[2]+'&_='+Math.floor(Date.now()/10000);
+  return 'https://site.api.espn.com/apis/site/v2/sports/'+e[0]+'/'+e[1]+'/scoreboard?dates='+ds+'&limit=300'+e[2]+'&_='+Math.floor(Date.now()/10000);
 }
 function parseEspn(j){
   const out=[];
@@ -627,36 +628,53 @@ function entitiesFor(lg){
   S.bets.forEach(b=>legsOf(b).forEach(l=>{if(l.gameKey.indexOf('feed:'+lg+':')===0)out.push(l)}));
   return out;
 }
-function dateRange(lg){
-  const now=new Date();
-  const day=(d,off)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+off);
-  let from=day(now,-1),to=day(now,3);
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+/* ESPN only accepts one day per request (a date range returns HTTP 400), so each day is its own call. */
+function pollDates(lg){
+  const set={};let missing=false;
   entitiesFor(lg).forEach(ent=>{
-    const t=ent.snap&&ent.snap.start?Date.parse(ent.snap.start):NaN;
-    if(!isNaN(t)){const d=new Date(t);const a=day(d,-1),z=day(d,1);if(a<from)from=a;if(z>to)to=z}
+    const g=resolveGame(ent);
+    if(g&&g.status==='final')return;
+    if(ent.snap&&ent.snap.qd)set[ent.snap.qd]=1;else missing=true;
   });
-  const min=day(now,-7),max=day(now,14);
-  if(from<min)from=min;if(to>max)to=max;
-  return [from,to];
+  const now=new Date();
+  if(missing||!Object.keys(set).length){set[ymd(now)]=1;set[ymd(addDays(now,-1))]=1}
+  return Object.keys(set);
 }
-async function loadLeague(lg){
-  if(!ESPN[lg])return false;
-  const r=dateRange(lg);
+function mergeFeed(lg,games){
+  const doc=FEED[lg]||(FEED[lg]={games:[],updatedAt:null});
+  const idx={};doc.games.forEach((g,i)=>{idx[g.id]=i});
+  games.forEach(g=>{if(idx[g.id]!=null)doc.games[idx[g.id]]=g;else{idx[g.id]=doc.games.length;doc.games.push(g)}});
+  const old=Date.now()-3*86400000;
+  doc.games=doc.games.filter(g=>!g.start||Date.parse(g.start)>old);
+  doc.updatedAt=new Date().toISOString();
+}
+async function loadDay(lg,ds){
   const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),9000);
   try{
-    const res=await fetch(espnUrl(lg,r[0],r[1]),{signal:ctl.signal});
+    const res=await fetch(espnUrl(lg,ds),{signal:ctl.signal});
     if(!res.ok)throw new Error('HTTP '+res.status);
     const j=await res.json();
-    FEED[lg]={games:parseEspn(j),updatedAt:new Date().toISOString()};
-    feedState.ok=Date.now();feedState.err='';
+    const stamp=new Date().toISOString();
+    const games=parseEspn(j);
+    games.forEach(g=>{g.qd=ds;g.u=stamp});
+    mergeFeed(lg,games);
     return true;
   }catch(e){
     feedState.err=e&&e.name==='AbortError'?'Timed out':(e&&/^HTTP/.test(e.message)?e.message:'Blocked or offline');
     return false;
   }finally{clearTimeout(tm)}
 }
+async function loadLeague(lg,dates,onEach){
+  if(!ESPN[lg])return false;
+  const days=dates&&dates.length?dates:pollDates(lg);
+  const res=await Promise.all(days.map(async ds=>{const ok=await loadDay(lg,ds);if(ok&&onEach)onEach();return ok}));
+  const any=res.some(Boolean);
+  if(any){feedState.ok=Date.now();feedState.err=''}
+  return any;
+}
 function fullSnap(lg,g){
-  return {id:g.id,league:lg,start:g.start,status:g.status,detail:g.detail,
+  return {id:g.id,league:lg,qd:g.qd,start:g.start,status:g.status,detail:g.detail,
     away:{abbr:g.away.abbr,name:g.away.name,score:g.away.score},home:{abbr:g.home.abbr,name:g.home.name,score:g.home.score}};
 }
 function syncAfterFeed(){
@@ -704,7 +722,7 @@ async function refresh(extraLeagues){
   refreshing=true;feedState.busy=true;renderFeed();
   const lgs=activeLeagues();
   (extraLeagues||[]).forEach(l=>{if(lgs.indexOf(l)<0)lgs.push(l)});
-  if(lgs.length){await Promise.all(lgs.map(loadLeague));syncAfterFeed()}
+  if(lgs.length){await Promise.all(lgs.map(l=>loadLeague(l)));syncAfterFeed()}
   feedState.busy=false;refreshing=false;
   render();renderFeed();
   if(!sheet.hidden){buildGames();refreshForm()}
@@ -997,7 +1015,7 @@ function visibleGames(lg){
   const doc=FEED[lg];if(!doc||!Array.isArray(doc.games))return [];
   const cutoff=Date.now()-12*3600*1000;
   return doc.games.filter(g=>g.status!=='final'||(g.start&&Date.parse(g.start)>cutoff))
-    .sort((x,y)=>{const rx=x.status==='live'?0:1,ry=y.status==='live'?0:1;return rx-ry||Date.parse(x.start||0)-Date.parse(y.start||0)}).slice(0,24);
+    .sort((x,y)=>{const rx=x.status==='live'?0:1,ry=y.status==='live'?0:1;return rx-ry||Date.parse(x.start||0)-Date.parse(y.start||0)});
 }
 const shiftNow=()=>(draft.pleaser?-1:1)*(parseNum($('#ptIn').value)||0);
 function buildMode(){
@@ -1036,15 +1054,22 @@ function buildLeagues(){
   $('#lgPills').innerHTML=Object.keys(LG).map(k=>'<button type="button" data-lg="'+k+'" aria-pressed="'+(draft.league===k)+'">'+LG[k].label+'</button>').join('');
 }
 function buildGames(){
-  const gs=visibleGames(draft.league);
+  const all=visibleGames(draft.league);
+  const box=$('#gameFilter');
+  box.hidden=all.length<=10;
+  const q=box.hidden?'':box.value.trim().toLowerCase();
+  const gs=q?all.filter(g=>(g.away.abbr+' '+g.away.name+' '+g.home.abbr+' '+g.home.name).toLowerCase().indexOf(q)>=0):all;
+  const shown=gs.slice(0,60);
   let h='';
-  if(draft.loading&&!gs.length)h+='<div class="none">Loading '+LG[draft.league].label+' games</div>';
-  else if(!gs.length)h+='<div class="none">'+(draft.loadErr?'Couldn’t load '+LG[draft.league].label+' games. Enter one by hand.':'No '+LG[draft.league].label+' games in the next few days. Enter one by hand.')+'</div>';
-  gs.forEach(g=>{
+  if(draft.loading&&!all.length)h+='<div class="none">Loading '+LG[draft.league].label+' games</div>';
+  else if(!all.length)h+='<div class="none">'+(draft.loadErr?'Couldn\u2019t load '+LG[draft.league].label+' games. Enter one by hand.':'No '+LG[draft.league].label+' games in the next few days. Enter one by hand.')+'</div>';
+  else if(!gs.length)h+='<div class="none">No games match that search.</div>';
+  shown.forEach(g=>{
     const key='feed:'+draft.league+':'+g.id;
     const tag=g.status==='live'?'Live':g.status==='final'?'Final':fmtTime(g.start);
     h+='<button type="button" data-gk="'+esc(key)+'" aria-pressed="'+(draft.gameKey===key)+'"><span class="gm">'+esc(g.away.abbr)+' @ '+esc(g.home.abbr)+'</span><span class="gt">'+esc(tag)+'</span></button>';
   });
+  if(gs.length>shown.length)h+='<div class="none">Showing the first '+shown.length+' of '+gs.length+'. Search for a team to narrow it.</div>';
   h+='<button type="button" data-gk="manual" aria-pressed="'+(draft.manual)+'"><span class="gm">Enter a game by hand</span><span class="gt">+</span></button>';
   $('#gameList').innerHTML=h;
   $('#manualBox').hidden=!draft.manual;
@@ -1145,10 +1170,14 @@ function applyLastDefaults(){
 }
 async function ensureLeague(lg){
   const doc=FEED[lg];
-  if(doc&&Date.now()-Date.parse(doc.updatedAt)<120000){draft.loading=false;draft.loadErr=false;buildGames();return}
+  if(doc&&doc.sheetAt&&Date.now()-doc.sheetAt<120000){draft.loading=false;draft.loadErr=false;buildGames();return}
   draft.loading=true;draft.loadErr=false;buildGames();
-  const ok=await loadLeague(lg);
-  draft.loading=false;draft.loadErr=!ok&&!FEED[lg];
+  const now=new Date();
+  const ahead=LG[lg].football?6:3;
+  const dates=[];for(let k=-1;k<=ahead;k++)dates.push(ymd(addDays(now,k)));
+  const ok=await loadLeague(lg,dates,()=>{if(draft.league===lg&&!sheet.hidden){buildGames();refreshForm()}});
+  if(ok&&FEED[lg])FEED[lg].sheetAt=Date.now();
+  draft.loading=false;draft.loadErr=!ok&&!(FEED[lg]&&FEED[lg].games.length);
   if(ok)syncAfterFeed();
   if(draft.league===lg){buildGames();refreshForm()}
   renderFeed();
@@ -1158,6 +1187,7 @@ function resetLegFields(keepLeague){
   $('#lineIn').value='';$('#mAway').value='';$('#mHome').value='';
 }
 function openSheet(){
+  $('#gameFilter').value='';
   const lgWithGames=Object.keys(LG).find(k=>visibleGames(k).length);
   draft.league=S.lastLeague||lgWithGames||'nfl';
   draft.kind='single';draft.type='spread';draft.legs=[];draft.pleaser=false;
@@ -1216,10 +1246,11 @@ $('#lineModeSeg').addEventListener('click',ev=>{
 });
 $('#lgPills').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-lg]');if(!b)return;
-  draft.league=b.dataset.lg;draft.gameKey=null;draft.snap=null;draft.manual=false;draft.side=null;
+  draft.league=b.dataset.lg;draft.gameKey=null;draft.snap=null;draft.manual=false;draft.side=null;$('#gameFilter').value='';
   buildLeagues();buildGames();buildSides();refreshForm();
   ensureLeague(draft.league);
 });
+$('#gameFilter').addEventListener('input',buildGames);
 $('#gameList').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-gk]');if(!b)return;
   const k=b.dataset.gk;
@@ -1316,17 +1347,20 @@ $('#moreBtn').addEventListener('click',()=>{
 });
 $('#feedTest').addEventListener('click',async()=>{
   const out=$('#feedTestOut');out.textContent='Testing';
-  try{
-    const now=new Date();
+  const today=ymd(new Date());
+  const one=async lg=>{
     const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),9000);
-    const res=await fetch(espnUrl('nfl',new Date(now.getFullYear(),now.getMonth(),now.getDate()-1),new Date(now.getFullYear(),now.getMonth(),now.getDate()+3)),{signal:ctl.signal});
-    clearTimeout(tm);
-    if(!res.ok){out.textContent='The score service answered with HTTP '+res.status+'.';return}
-    const j=await res.json();const g=parseEspn(j);
-    out.textContent='Working. Got '+g.length+' NFL games'+(g.length?', for example '+g[0].away.abbr+' at '+g[0].home.abbr+'.':'.');
-  }catch(e){
-    out.textContent=e&&e.name==='AbortError'?'No answer after 9 seconds. Check your connection.':'Couldn’t reach the score service from this browser. It may be offline or blocking this site.';
-  }
+    try{
+      const res=await fetch(espnUrl(lg,today),{signal:ctl.signal});
+      if(!res.ok)return {err:'HTTP '+res.status};
+      return {n:parseEspn(await res.json()).length};
+    }catch(e){return {err:e&&e.name==='AbortError'?'timed out':'unreachable'}}
+    finally{clearTimeout(tm)}
+  };
+  const r=await Promise.all([one('nfl'),one('nba')]);
+  const bad=r.find(x=>x.err);
+  if(bad){out.textContent=bad.err==='unreachable'?'Couldn\u2019t reach the score service from this browser. It may be offline or blocking this site.':bad.err==='timed out'?'No answer after 9 seconds. Check your connection.':'The score service answered with '+bad.err+'.';return}
+  out.textContent='Working. Today has '+r[0].n+' NFL and '+r[1].n+' NBA games.';
 });
 $('#bkShow').addEventListener('click',()=>{$('#bk').value=backupText();$('#bkMsg').textContent='Select all and copy this text somewhere safe.'});
 $('#bkCopy').addEventListener('click',async()=>{
