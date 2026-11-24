@@ -254,7 +254,26 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
 .flip{animation:flip .9s ease-out}
 @keyframes flip{0%{box-shadow:0 0 0 0 var(--st-solid);transform:scale(1.015)}100%{box-shadow:0 0 0 14px transparent;transform:scale(1)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-@media (prefers-reduced-motion:reduce){.flip,.livedot,.hdrbtn.busy .fd{animation:none}}
+@media (prefers-reduced-motion:reduce){.flip,.livedot,.hdrbtn.busy .fd,.toast{animation:none}}
+.toasts{position:fixed;left:0;right:0;top:max(8px,env(safe-area-inset-top));z-index:100;display:flex;flex-direction:column;gap:8px;padding:0 12px;pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;width:100%;max-width:560px;margin:0 auto;padding:10px 8px 10px 12px;border-radius:14px;border:1px solid var(--line);border-left:6px solid var(--st-solid);background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.28);animation:tin .25s ease-out;cursor:pointer}
+.toast .tbody{flex:1;min-width:0}
+.toast b,.alog b{display:block;font:800 19px/1.1 var(--display);letter-spacing:.03em}
+.toast .tbody span,.alog span{display:block;margin-top:2px;font-size:13px;line-height:1.3;color:var(--muted)}
+.toast .ttime,.alog em{display:block;margin-top:3px;font-size:11px;font-style:normal;color:var(--muted)}
+.toast .tclose{flex:none;width:40px;height:40px;border-radius:50%;border:0;background:var(--idle-bg);font-size:22px;line-height:1}
+.tbadge{flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--st-solid);color:var(--st-on)}
+.tbadge svg{width:16px;height:16px}
+@keyframes tin{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:50px;padding:0 2px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;font-weight:600}
+.sw i{flex:none;position:relative;width:50px;height:30px;border-radius:15px;background:var(--idle-solid);transition:background .15s}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw[aria-checked="true"] i{background:var(--win-solid)}
+.sw[aria-checked="true"] i::after{transform:translateX(20px)}
+.sw:disabled{opacity:.45}
+.alog{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.alog li{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid var(--line);border-left:6px solid var(--st-solid)}
+.alog li.none{display:block;border:0;padding:4px 2px;font-size:13px;color:var(--muted)}
 @media (max-width:370px){.num{font-size:34px}.tile .tl{font-size:10px}.pick{font-size:23px}.hdrbtn{padding:0 9px}}
 </style>
 </head>
@@ -275,6 +294,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
   <div class="dock"><button id="histBtn" class="secondary" type="button">History<span id="histCount"></span></button><button id="addBtn" class="primary" type="button">Add a bet</button></div>
 </div>
 
+<div id="toasts" class="toasts" role="region" aria-label="Bet alerts" aria-live="polite"></div>
 <div id="scrim" class="scrim" hidden></div>
 
 <section id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1" hidden>
@@ -283,6 +303,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     <fieldset><legend>Kind of bet</legend><div id="modeSeg" class="seg" role="group" aria-label="Kind of bet"></div></fieldset>
 
     <div id="teaserSetup" hidden>
+      <div id="tzOnly">
       <fieldset>
         <legend>Teaser points</legend>
         <div id="ptChips" class="pills"></div>
@@ -290,7 +311,8 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
       </fieldset>
       <fieldset><legend>Direction</legend><div id="dirSeg" class="seg" role="group" aria-label="Teaser or pleaser"></div><p id="dirHelp" class="under"></p></fieldset>
       <fieldset><legend>If a leg lands exactly on the number</legend><div id="pushSeg" class="seg" role="group" aria-label="Push rule"></div><p id="pushHelp" class="under"></p></fieldset>
-      <fieldset><legend id="legsLegend">Legs</legend><ul id="legList" class="legsum"></ul></fieldset>
+      </div>
+      <fieldset><legend id="legsLegend">Legs</legend><ul id="legList" class="legsum"></ul><p id="parlayCalc" class="under" role="status"></p></fieldset>
       <h3 id="legHead" class="subhead">Add a leg</h3>
     </div>
 
@@ -318,11 +340,16 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
       <p id="lineHelp" class="under"></p>
       <p id="linePreview" class="under" style="font-weight:600;color:var(--ink)"></p>
     </fieldset>
+    <fieldset id="legOddsSet" hidden>
+      <legend>This leg’s odds</legend>
+      <div class="field"><button id="legOddsSign" type="button" aria-label="Switch between plus and minus">&plusmn;</button><input id="legOddsIn" type="text" inputmode="numeric" autocomplete="off" value="-110" aria-label="Odds for this leg"></div>
+      <p class="under">Usually −110 for a spread or total. For a moneyline, use the price on your ticket.</p>
+    </fieldset>
     <button id="addLeg" class="secondary" type="button" hidden disabled style="margin-bottom:14px">Add leg</button>
 
     <div class="two">
       <fieldset>
-        <legend>Odds</legend>
+        <legend id="oddsLegend">Odds</legend>
         <div class="field">
           <button id="oddsSign" type="button" aria-label="Switch between plus and minus">&plusmn;</button>
           <input id="oddsIn" type="text" inputmode="numeric" autocomplete="off" value="-110" aria-label="American odds">
@@ -345,8 +372,16 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
 </section>
 
 <section id="more" class="sheet" role="dialog" aria-modal="true" aria-labelledby="moreTitle" tabindex="-1" hidden>
-  <div class="sheet-head"><h2 id="moreTitle">Backup and scores</h2><button id="moreClose" class="x" type="button" aria-label="Close">&times;</button></div>
+  <div class="sheet-head"><h2 id="moreTitle">Settings</h2><button id="moreClose" class="x" type="button" aria-label="Close">&times;</button></div>
   <div class="sheet-body">
+    <fieldset>
+      <legend>Alerts</legend>
+      <p class="under" style="margin:0 0 6px">When a bet changes status, like going from covering to not covering, Cover Watch shows an alert at the top of the screen with a sound. iPhone pauses web apps when the screen locks or you switch to another app, so anything that changed in the meantime shows up the moment you come back. Sound starts after your first tap in the app.</p>
+      <div id="alertSwitches"></div>
+      <div class="btnrow"><button id="alertTest" type="button">Send a test alert</button></div>
+      <ul id="alertLog" class="alog" aria-label="Recent alerts"></ul>
+      <div class="btnrow"><button id="alertClear" type="button">Clear this list</button></div>
+    </fieldset>
     <fieldset>
       <legend>Live score feed</legend>
       <p id="feedInfo" class="under" style="margin:0 0 8px"></p>
@@ -522,7 +557,93 @@ const CW=(function(){
     e.hold=e.st==='loss'?-stake:(e.st==='win'&&pre===0?win:null);
     return e;
   }
-  return {LEAGUES,plain,signed,line,odds,money,smoney,profit,evaluate,r2,shift,unshift,teaserShift,evaluateTeaser};
+  /* ---- parlays ----
+     Each leg carries its own odds. The ticket pays the product of the legs unless the ticket's printed odds are given.
+     A leg that lands on its number drops out and the rest of the legs are paid. */
+  const toDec=o=>o<0?1+100/-o:1+o/100;
+  const toAm=d=>d>=2?Math.round((d-1)*100):Math.round(-100/(d-1));
+  function parlayOdds(legs){
+    if(!legs||!legs.length)return null;
+    let d=1;legs.forEach(l=>{d*=toDec(Number(l.odds)||-110)});
+    return {dec:d,am:toAm(d)};
+  }
+  /* ticket: {odds: printed ticket odds or null, stake, legs:[{type,side,line,odds}]}
+     games: one resolved game per leg. */
+  function evaluateParlay(t,games){
+    const n=t.legs.length;
+    const legs=t.legs.map((leg,i)=>{
+      const le=evaluate({type:leg.type,side:leg.side,line:leg.line,odds:Number(leg.odds)||-110,stake:0},games[i]);
+      le.leg=leg;le.adj=leg.line;le.game=games[i];le.locked=null;
+      if(le.phase==='live'&&leg.type==='total'){
+        if(leg.side==='over'&&le.m>0)le.locked='win';
+        if(leg.side==='under'&&le.m<0)le.locked='loss';
+      }
+      return le;
+    });
+    let banked=0,cover=0,online=0,behind=0,pre=0,pushes=0,dead=null,finals=0;
+    legs.forEach((le,i)=>{
+      if(le.phase==='final'){
+        finals++;
+        if(le.outcome==='won')banked++;
+        else if(le.outcome==='lost'){if(!dead)dead={i:i,why:'lost'}}
+        else pushes++;
+      }else if(le.phase==='pre')pre++;
+      else if(le.locked==='win')banked++;
+      else if(le.locked==='loss'){if(!dead)dead={i:i,why:'busted'}}
+      else if(le.st==='win')cover++;
+      else if(le.st==='push')online++;
+      else behind++;
+    });
+    const stake=Number(t.stake)||0;
+    const ov=(t.odds!=null&&t.odds!==''&&isFinite(Number(t.odds)))?Number(t.odds):null;
+    const kept=t.legs.filter((l,i)=>!(legs[i].phase==='final'&&legs[i].outcome==='push'));
+    const full=parlayOdds(t.legs);
+    const cur=pushes>0&&kept.length?parlayOdds(kept):full;
+    const useOv=ov!=null&&pushes===0;
+    const odds=useOv?ov:cur.am;
+    const win=stake>0?(useOv?profit(stake,ov):cents(stake*(cur.dec-1))):0;
+    const covering=banked+cover;
+    const e={kind:'parlay',n,legs,stake,win,odds,covering,counts:{banked,cover,online,behind,pre,pushes},dead:dead};
+    e.num=covering+'/'+n;e.cap='legs covering';
+    e.pips=legs.map(le=>{
+      if(le.phase==='pre')return {st:'idle',full:false};
+      if(le.phase==='final')return {st:le.outcome==='won'?'win':le.outcome==='lost'?'loss':'push',full:true};
+      if(le.locked)return {st:le.locked==='win'?'win':'loss',full:true};
+      return {st:le.st,full:false};
+    });
+    if(dead){
+      e.phase='final';e.outcome='lost';e.st='loss';e.word='lost';e.net=-stake;e.early=finals<n;
+      return e;
+    }
+    if(finals===n){
+      e.phase='final';
+      if(pushes===n){e.outcome='push';e.st='push';e.word='push';e.net=0;e.sub='Every leg landed on the number. Stake returned';}
+      else if(pushes===0){e.outcome='won';e.st='win';e.word='won';e.net=win;e.sub='All '+n+' legs won';}
+      else{
+        e.outcome='won';e.st='win';e.word='won';e.reduced=true;
+        if(ov!=null){e.net=null;e.sub=(n-pushes)+' of '+n+' legs won, '+pushes+' pushed. Payout is reduced, so check your book';}
+        else{e.net=win;e.sub=(n-pushes)+' of '+n+' legs won, '+pushes+' pushed. Paid at the reduced odds';}
+      }
+      return e;
+    }
+    if(pre===n){e.phase='pre';e.st='idle';e.word='Not started';e.num='—';e.cap='';e.sub='';return e;}
+    e.phase='live';
+    let weak=-1;
+    legs.forEach((le,i)=>{if(le.phase==='live'&&!le.locked&&(weak<0||le.m<legs[weak].m))weak=i});
+    e.weak=weak;
+    const bits=[covering+' of '+n+' covering'];
+    if(pre)bits.push(pre+' not started');
+    if(pushes)bits.push(pushes+' pushed');
+    if(online)bits.push(online+' on the line');
+    if(behind)bits.push(behind+' behind');
+    e.sub=bits.join(' · ');
+    if(behind>0){e.st='loss';e.word='Behind';}
+    else if(online>0){e.st='push';e.word='On the line';}
+    else{e.st='win';e.word=pre>0?'On track':'All covering';}
+    e.hold=e.st==='loss'?-stake:(e.st==='win'&&pre===0?win:null);
+    return e;
+  }
+  return {LEAGUES,plain,signed,line,odds,money,smoney,profit,evaluate,r2,shift,unshift,teaserShift,evaluateTeaser,toDec,toAm,parlayOdds,evaluateParlay};
 })();
 </script>
 
@@ -565,6 +686,8 @@ function normalize(d){
   return {v:2,bets:Array.isArray(d.bets)?d.bets:[],manual:Array.isArray(d.manual)?d.manual:[],
     overrides:d.overrides&&typeof d.overrides==='object'?d.overrides:{},
     showSamples:d.showSamples!==false,history:Array.isArray(d.history)?d.history.filter(r=>r&&r.id&&r.outcome):[],lastLeague:d.lastLeague||'nfl',
+    notif:Object.assign({on:true,flip:true,start:true,final:true,sound:true,vibrate:true},d.notif&&typeof d.notif==='object'?d.notif:{}),
+    seen:d.seen&&typeof d.seen==='object'&&!Array.isArray(d.seen)?d.seen:{},log:Array.isArray(d.log)?d.log.filter(a=>a&&a.title).slice(0,40):[],
     lastPoints:d.lastPoints||13,lastPush:d.lastPush||'reduce',lastTeaserOdds:d.lastTeaserOdds||'',lastEnterAs:d.lastEnterAs||'teased'};
 }
 let storageOK=true;
@@ -581,7 +704,9 @@ const ui={open:null,confirm:null};
 function save(){
   try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){storageOK=false}
 }
-const legsOf=b=>b.kind==='teaser'?b.legs:[b];
+const isTk=b=>b.kind==='teaser'||b.kind==='parlay';
+const legsOf=b=>isTk(b)?b.legs:[b];
+const ticketTitle=b=>b.kind==='parlay'?b.legs.length+'-leg parlay':CW.plain(b.points)+'-point '+(b.pleaser?'pleaser':'teaser');
 
 /* ---------- demo game (clearly fake teams) ---------- */
 const T0=Date.now();
@@ -637,11 +762,11 @@ function resolveGame(ent){
   return g0;
 }
 function mk(b,sample){
-  if(b.kind==='teaser'){
+  if(isTk(b)){
     const games=b.legs.map(resolveGame);
     if(games.some(g=>!g))return null;
     const starts=games.map(g=>g.start?Date.parse(g.start):1e15);
-    return {b,games,g:games[0],e:CW.evaluateTeaser(b,games),sample,start:Math.min.apply(null,starts)};
+    return {b,games,g:games[0],e:b.kind==='parlay'?CW.evaluateParlay(b,games):CW.evaluateTeaser(b,games),sample,start:Math.min.apply(null,starts)};
   }
   const g=resolveGame(b);if(!g)return null;
   return {b,g,e:CW.evaluate(b,g),sample,start:g.start?Date.parse(g.start):1e15};
@@ -818,7 +943,8 @@ const PUSHTXT={lose:'Ties lose',reduce:'Ties drop out',refund:'Ties refund'};
 
 /* ---------- cards ---------- */
 function stakeLine(b,e){
-  return e.stake>0?CW.money(e.stake)+' at '+CW.odds(b.odds)+' · to win '+CW.money(e.win):CW.odds(b.odds);
+  const o=e.odds!=null?e.odds:b.odds;
+  return e.stake>0?CW.money(e.stake)+' at '+CW.odds(o)+' · to win '+CW.money(e.win):CW.odds(o);
 }
 function freshness(games){
   let oldest=Infinity,mine=false,any=false;
@@ -872,14 +998,15 @@ function legRow(it,i){
   const e=it.e,le=e.legs[i],leg=le.leg,g=le.game;
   const st=le.phase==='pre'?'idle':le.locked?(le.locked==='win'?'win':'loss'):le.st;
   const title=pickTitle(leg,g,le.adj);
-  const was=leg.type==='total'?CW.plain(leg.line):CW.line(leg.line);
+  const isP=it.b.kind==='parlay';
+  const was=isP?CW.odds(leg.odds):leg.type==='total'?CW.plain(leg.line):CW.line(leg.line);
   const a=g.away.score==null?0:g.away.score,h=g.home.score==null?0:g.home.score;
   const score=le.phase==='pre'?esc(g.away.abbr)+' @ '+esc(g.home.abbr)+(g.start?' · '+esc(fmtTime(g.start)):''):esc(g.away.abbr)+' '+a+' @ '+esc(g.home.abbr)+' '+h+' · '+esc(le.phase==='final'?'Final':(g.detail||'Live'));
   const sub2=le.phase==='pre'?'':esc(le.phase==='final'?le.sub:(le.locked==='win'?'Over is cashed':le.locked==='loss'?'Under is busted':le.sub));
   const num=le.phase==='pre'?'—':le.num;
   const liveN=e.legs.filter(x=>x.phase==='live'&&!x.locked).length;
   const weak=(e.weak===i&&e.phase==='live'&&e.counts.behind===0&&e.counts.online===0&&liveN>1&&le.phase==='live')?' · closest to failing':'';
-  return '<li class="leg st-'+st+'"><span class="lbadge">'+ICON[st]+'</span><div class="lmain"><div class="ltitle">'+(leg.type==='total'?pair(g):crest(teamOf(g,leg.side),24))+'<span>'+esc(title)+'</span><s>'+(leg.type==='total'?'was ':'was ')+esc(was)+'</s></div><div class="lsub">'+score+esc(weak)+'</div>'+(sub2?'<div class="lsub2">'+sub2+'</div>':'')+'</div><div class="lnum">'+esc(num)+'</div></li>';
+  return '<li class="leg st-'+st+'"><span class="lbadge">'+ICON[st]+'</span><div class="lmain"><div class="ltitle">'+(leg.type==='total'?pair(g):crest(teamOf(g,leg.side),24))+'<span>'+esc(title)+'</span><s>'+(isP?'':'was ')+esc(was)+'</s></div><div class="lsub">'+score+esc(weak)+'</div>'+(sub2?'<div class="lsub2">'+sub2+'</div>':'')+'</div><div class="lnum">'+esc(num)+'</div></li>';
 }
 function ticketHTML(it){
   const {b,games,e,sample}=it;
@@ -899,13 +1026,13 @@ function ticketHTML(it){
   const open=!sample&&ui.open===b.id;
   const lgs=[];b.legs.forEach(l=>{if(lgs.indexOf(l.league)<0)lgs.push(l.league)});
   const face='<div class="face"'+(sample?'':' role="button" tabindex="0" aria-expanded="'+open+'" data-a="open" data-id="'+b.id+'"')+'>'
-    +'<div class="row"><div class="chips"><span class="chip strong">'+(b.pleaser?'Pleaser':'Teaser')+'</span>'+lgs.map(l=>'<span class="chip">'+LG[l].label+'</span>').join('')+(sample?'<span class="chip">Sample</span>':'')+'<span class="kind">'+esc(PUSHTXT[b.push||'reduce'])+'</span></div>'
+    +'<div class="row"><div class="chips"><span class="chip strong">'+(b.kind==='parlay'?'Parlay':b.pleaser?'Pleaser':'Teaser')+'</span>'+lgs.map(l=>'<span class="chip">'+LG[l].label+'</span>').join('')+(sample?'<span class="chip">Sample</span>':'')+'<span class="kind">'+esc(b.kind==='parlay'?'Ties drop out':PUSHTXT[b.push||'reduce'])+'</span></div>'
     +'<div class="when">'+(live?'<span class="livedot" aria-hidden="true"></span>':'')+esc(detail)+'</div></div>'
-    +'<div class="pickrow"><div class="pick">'+esc(CW.plain(b.points)+'-point '+(b.pleaser?'pleaser':'teaser'))+'</div><div class="board">'+b.legs.length+' legs</div></div>'
+    +'<div class="pickrow"><div class="pick">'+esc(ticketTitle(b))+'</div><div class="board">'+(b.kind==='parlay'?'':b.legs.length+' legs')+'</div></div>'
     +verdict+pips+legs+foot+'</div>';
   return '<article class="card st-'+e.st+(fin?' final':'')+'" data-key="'+b.id+'" data-st="'+e.st+e.phase+'">'+face+(open?ticketEditor(it):'')+'</article>';
 }
-const cardHTML=it=>it.b.kind==='teaser'?ticketHTML(it):singleHTML(it);
+const cardHTML=it=>isTk(it.b)?ticketHTML(it):singleHTML(it);
 
 function scoreEditor(b,legIdx,g){
   const L=LG[g.league];
@@ -924,6 +1051,15 @@ function delBtn(b){
 function singleEditor(b,g){return '<div class="editor">'+scoreEditor(b,null,g)+HINT+delBtn(b)+'</div>'}
 function ticketEditor(it){
   const b=it.b,seen={};
+  if(b.kind==='parlay'){
+    let hp='<div class="editor"><p class="hint" style="margin-top:0">A leg that lands exactly on its number drops out, and the ticket pays the rest at reduced odds.</p>';
+    b.legs.forEach((l,i)=>{
+      if(seen[l.gameKey])return;seen[l.gameKey]=1;
+      const g=it.games[i];
+      hp+='<div class="ed-game">'+esc(g.away.abbr)+' @ '+esc(g.home.abbr)+'</div>'+scoreEditor(b,i,g);
+    });
+    return hp+HINT+delBtn(b)+'</div>';
+  }
   const push=['lose','reduce','refund'].map(k=>'<button type="button" data-a="push" data-id="'+b.id+'" data-v="'+k+'" aria-pressed="'+((b.push||'reduce')===k)+'">'+{lose:'Loses',reduce:'Drops out',refund:'Refunds'}[k]+'</button>').join('');
   let h='<div class="editor"><div class="ed-game">If a leg lands on the number</div><div class="seg" role="group" aria-label="Push rule">'+push+'</div>';
   b.legs.forEach((l,i)=>{
@@ -942,13 +1078,14 @@ function section(title,items,note){
 }
 function holdNet(it){
   const e=it.e;
-  if(it.b.kind==='teaser')return e.hold==null?null:e.hold;
+  if(isTk(it.b))return e.hold==null?null:e.hold;
   if(!(e.stake>0))return null;
   return e.st==='win'?e.win:e.st==='loss'?-e.stake:0;
 }
 function render(){
   const real=S.bets.map(b=>mk(b,false)).filter(Boolean);
   syncLedger(real);
+  checkAlerts(real);
   const samples=S.showSamples?SAMPLES.map(b=>mk(b,true)).filter(Boolean):[];
   const counted=real.length?real:samples;
   const liveC=counted.filter(i=>i.e.phase==='live');
@@ -1018,13 +1155,13 @@ function focusSelector(){
 
 /* ---------- card actions ---------- */
 function findBet(id){return S.bets.find(b=>b.id===id)}
-function entOf(b,legAttr){return b.kind==='teaser'&&legAttr!==''&&legAttr!=null?b.legs[+legAttr]:b}
+function entOf(b,legAttr){return isTk(b)&&legAttr!==''&&legAttr!=null?b.legs[+legAttr]:b}
 function setOverride(ent,fn){
   const g0=baseGame(ent),g=resolveGame(ent);if(!g0||!g)return;
   let ov=S.overrides[ent.gameKey];
   if(!ov||ov.fp!==fp(g0))ov={a:g.away.score||0,h:g.home.score||0,status:g.status,fp:fp(g0)};
   fn(ov);ov.at=Date.now();
-  S.overrides[ent.gameKey]=ov;save();render();
+  S.overrides[ent.gameKey]=ov;save();alertMute=true;render();alertMute=false;
 }
 function cleanupGames(keys){
   keys.forEach(k=>{
@@ -1044,7 +1181,7 @@ $('#main').addEventListener('click',ev=>{
     });return;
   }
   if(a==='gs'){const b=findBet(id);if(b)setOverride(entOf(b,t.dataset.leg),ov=>{ov.status=t.dataset.v});return}
-  if(a==='push'){const b=findBet(id);if(b){b.push=t.dataset.v;S.lastPush=b.push;save();render()}return}
+  if(a==='push'){const b=findBet(id);if(b){b.push=t.dataset.v;S.lastPush=b.push;save();alertMute=true;render();alertMute=false}return}
   if(a==='del'){
     if(ui.confirm!==id){ui.confirm=id;render();return}
     const b=findBet(id);ui.confirm=null;ui.open=null;
@@ -1080,13 +1217,35 @@ function visibleGames(lg){
 }
 const shiftNow=()=>(draft.pleaser?-1:1)*(parseNum($('#ptIn').value)||0);
 function buildMode(){
-  $('#modeSeg').innerHTML=[['single','Single bet'],['teaser','Teaser']].map(m=>'<button type="button" data-mode="'+m[0]+'" aria-pressed="'+(draft.kind===m[0])+'">'+m[1]+'</button>').join('');
-  const tz=draft.kind==='teaser';
-  $('#teaserSetup').hidden=!tz;
-  $('#addLeg').hidden=!tz;
+  $('#modeSeg').innerHTML=[['single','Single bet'],['teaser','Teaser'],['parlay','Parlay']].map(m=>'<button type="button" data-mode="'+m[0]+'" aria-pressed="'+(draft.kind===m[0])+'">'+m[1]+'</button>').join('');
+  const tz=draft.kind==='teaser',pz=draft.kind==='parlay';
+  $('#teaserSetup').hidden=!(tz||pz);
+  $('#tzOnly').hidden=!tz;
+  $('#addLeg').hidden=!(tz||pz);
   $('#lineModeBox').hidden=!tz;
   $('#linePreview').hidden=!tz;
-  $('#sheetTitle').textContent=tz?'Add a teaser':'Add a bet';
+  $('#legOddsSet').hidden=!pz;
+  $('#sheetTitle').textContent=tz?'Add a teaser':pz?'Add a parlay':'Add a bet';
+  $('#oddsLegend').textContent=pz?'Ticket odds (optional)':'Odds';
+  if(!pz)$('#oddsIn').placeholder='';
+}
+function syncLegOdds(){
+  if(draft.kind!=='parlay')return;
+  const el=$('#legOddsIn');
+  if(draft.type==='moneyline'){if(el.value==='-110')el.value=''}
+  else if(el.value==='')el.value='-110';
+}
+function buildParlayCalc(){
+  const pz=draft.kind==='parlay';
+  let txt='',ph='Auto';
+  if(pz&&draft.legs.length>=2){
+    const po=CW.parlayOdds(draft.legs);
+    ph='Auto '+CW.odds(po.am);
+    const stake=parseNum($('#stakeIn').value);
+    txt='Your legs multiply to '+CW.odds(po.am)+(stake>0?'. '+CW.money(stake)+' would win '+CW.money(stake*(po.dec-1)):'')+'. Fill in the ticket odds below only if your book shows something different.';
+  }
+  $('#parlayCalc').textContent=txt;
+  if(pz)$('#oddsIn').placeholder=ph;
 }
 function buildTeaser(){
   $('#ptChips').innerHTML=POINTS.map(p=>'<button type="button" data-pt="'+p+'" aria-pressed="'+(parseNum($('#ptIn').value)===p)+'">'+p+'</button>').join('');
@@ -1097,19 +1256,24 @@ function buildTeaser(){
   buildLegList();
 }
 function legSummary(l){
-  const s=shiftNow();
-  const adj=CW.shift(l.type,l.side,l.line,s);
   const sn=l.snap;
   const team=l.side==='home'?sn.home.abbr:sn.away.abbr;
+  if(draft.kind==='parlay'){
+    const t=l.type==='total'?(l.side==='over'?'Over ':'Under ')+CW.plain(l.line):l.type==='moneyline'?team+' ML':team+' '+CW.line(l.line);
+    return {title:t,meta:CW.odds(l.odds)+' · '+sn.away.abbr+' @ '+sn.home.abbr+(sn.start?' · '+fmtTime(sn.start):'')};
+  }
+  const s=shiftNow();
+  const adj=CW.shift(l.type,l.side,l.line,s);
   const was=l.type==='total'?CW.plain(l.line):CW.line(l.line);
   const now=l.type==='total'?CW.plain(adj):CW.line(adj);
   const title=l.type==='total'?(l.side==='over'?'Over ':'Under ')+now:team+' '+now;
-  return {title:title,was:was,game:sn.away.abbr+' @ '+sn.home.abbr+(sn.start?' · '+fmtTime(sn.start):'')};
+  return {title:title,meta:'was '+was+' · '+sn.away.abbr+' @ '+sn.home.abbr+(sn.start?' · '+fmtTime(sn.start):'')};
 }
 function buildLegList(){
   const n=draft.legs.length;
   $('#legsLegend').textContent='Legs ('+n+')';
-  $('#legList').innerHTML=n?draft.legs.map((l,i)=>{const x=legSummary(l);return '<li><div><b>'+esc(x.title)+'</b><span>was '+esc(x.was)+' · '+esc(x.game)+'</span></div><button type="button" data-rm="'+i+'" aria-label="Remove leg '+(i+1)+'">&times;</button></li>'}).join(''):'<li class="none">Add at least two legs below.</li>';
+  $('#legList').innerHTML=n?draft.legs.map((l,i)=>{const x=legSummary(l);return '<li><div><b>'+esc(x.title)+'</b><span>'+esc(x.meta)+'</span></div><button type="button" data-rm="'+i+'" aria-label="Remove leg '+(i+1)+'">&times;</button></li>'}).join(''):'<li class="none">Add at least two legs below.</li>';
+  buildParlayCalc();
 }
 function buildLeagues(){
   $('#lgPills').innerHTML=Object.keys(LG).map(k=>'<button type="button" data-lg="'+k+'" aria-pressed="'+(draft.league===k)+'">'+LG[k].label+'</button>').join('');
@@ -1181,7 +1345,12 @@ function legDraft(){
     if(!isHalf(l))return {err:'Enter the line in whole or half points.'};
     line=draft.type==='total'?Math.abs(l):l;
   }
-  return {line:line};
+  let odds=null;
+  if(draft.kind==='parlay'){
+    odds=parseNum($('#legOddsIn').value);
+    if(odds==null||!Number.isInteger(odds)||Math.abs(odds)<100)return {err:'Enter this leg’s odds, like -110 or +150.'};
+  }
+  return {line:line,odds:odds};
 }
 function validate(){
   const odds=parseNum($('#oddsIn').value);
@@ -1191,6 +1360,14 @@ function validate(){
   if(draft.kind==='single'){
     const d=legDraft();if(d.err)return d.err;
     if(!oddsOk)return 'Odds should look like -110 or +150.';
+    if(!stakeOk)return 'Stake should be a dollar amount.';
+    return '';
+  }
+  if(draft.kind==='parlay'){
+    if(draft.legs.length<2)return draft.legs.length?'Add at least one more leg.':'Add at least two legs.';
+    const d=legDraft();
+    if(!d.err)return 'You picked a leg but haven’t added it. Tap Add leg.';
+    if($('#oddsIn').value.trim()!==''&&!oddsOk)return 'Ticket odds should look like +264, or leave it blank.';
     if(!stakeOk)return 'Stake should be a dollar amount.';
     return '';
   }
@@ -1210,10 +1387,11 @@ function refreshForm(){
   const msg=validate();
   $('#formHint').textContent=msg;
   $('#saveBet').disabled=!!msg;
-  $('#saveBet').textContent=draft.kind==='teaser'?'Save teaser'+(draft.legs.length?' · '+draft.legs.length+(draft.legs.length===1?' leg':' legs'):''):'Save bet';
+  $('#saveBet').textContent=draft.kind==='single'?'Save bet':(draft.kind==='parlay'?'Save parlay':'Save teaser')+(draft.legs.length?' · '+draft.legs.length+(draft.legs.length===1?' leg':' legs'):'');
+  buildParlayCalc();
+  if(draft.kind!=='single')$('#addLeg').disabled=!!legDraft().err;
   if(draft.kind==='teaser'){
     const d=legDraft();
-    $('#addLeg').disabled=!!d.err;
     const pv=$('#linePreview');
     if(!d.err&&draft.type!=='moneyline'){
       const s=shiftNow();
@@ -1254,7 +1432,8 @@ function openSheet(){
   draft.kind='single';draft.type='spread';draft.legs=[];draft.pleaser=false;
   resetLegFields();
   applyLastDefaults();
-  $('#oddsIn').value='-110';$('#stakeIn').value='';
+  draft.oddsBy={single:'-110',teaser:S.lastTeaserOdds||'',parlay:''};
+  $('#oddsIn').value='-110';$('#stakeIn').value='';$('#legOddsIn').value='-110';
   buildMode();buildTeaser();buildLeagues();buildGames();buildType();buildSides();refreshForm();
   scrim.hidden=false;sheet.hidden=false;sheet.focus();
   ensureLeague(draft.league);
@@ -1267,15 +1446,15 @@ scrim.addEventListener('click',closeSheet);
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&(!sheet.hidden||!more.hidden||!hist.hidden))closeSheet()});
 
 $('#modeSeg').addEventListener('click',ev=>{
-  const b=ev.target.closest('[data-mode]');if(!b)return;
+  const b=ev.target.closest('[data-mode]');if(!b||b.dataset.mode===draft.kind)return;
+  draft.oddsBy[draft.kind]=$('#oddsIn').value;
   draft.kind=b.dataset.mode;
+  $('#oddsIn').value=draft.oddsBy[draft.kind]||'';
   if(draft.kind==='teaser'){
-    if(!$('#oddsIn').value||$('#oddsIn').value==='-110')$('#oddsIn').value=S.lastTeaserOdds||'';
     if(draft.type==='moneyline')draft.type='spread';
     draft.side=null;
-  }else{
-    if($('#oddsIn').value===(S.lastTeaserOdds||'')||!$('#oddsIn').value)$('#oddsIn').value='-110';
   }
+  syncLegOdds();
   buildMode();buildTeaser();buildType();buildSides();refreshForm();
 });
 $('#ptChips').addEventListener('click',ev=>{
@@ -1326,7 +1505,7 @@ $('#gameList').addEventListener('click',ev=>{
 ['#mAway','#mHome'].forEach(s=>$(s).addEventListener('input',()=>{draft.side=null;buildSides();refreshForm()}));
 $('#typeSeg').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-ty]');if(!b)return;
-  draft.type=b.dataset.ty;draft.side=null;buildType();buildSides();refreshForm();
+  draft.type=b.dataset.ty;draft.side=null;syncLegOdds();buildType();buildSides();refreshForm();
 });
 $('#sideBtns').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-sd]');if(!b)return;
@@ -1345,7 +1524,8 @@ function flipSign(el){
 }
 $('#lineSign').addEventListener('click',()=>flipSign($('#lineIn')));
 $('#oddsSign').addEventListener('click',()=>flipSign($('#oddsIn')));
-['#lineIn','#oddsIn','#stakeIn'].forEach(s=>$(s).addEventListener('input',refreshForm));
+$('#legOddsSign').addEventListener('click',()=>flipSign($('#legOddsIn')));
+['#lineIn','#oddsIn','#stakeIn','#legOddsIn'].forEach(s=>$(s).addEventListener('input',refreshForm));
 
 /* Turn the leg being built into a stored leg. Manual games are only created when the bet is saved. */
 function builtLeg(){
@@ -1354,6 +1534,7 @@ function builtLeg(){
   let orig=d.line;
   if(draft.kind==='teaser'&&draft.type!=='moneyline'&&draft.enterAs==='teased')orig=CW.unshift(draft.type,draft.side,d.line,s);
   const leg={gameKey:draft.gameKey,league:draft.league,type:draft.type,side:draft.side,line:orig};
+  if(draft.kind==='parlay')leg.odds=d.odds;
   if(draft.manual){
     const t=teamsNow();
     leg.manualSpec={away:{abbr:t.away.abbr,name:t.away.name},home:{abbr:t.home.abbr,name:t.home.name}};
@@ -1366,6 +1547,7 @@ $('#addLeg').addEventListener('click',()=>{
   const leg=builtLeg();if(!leg)return;
   draft.legs.push(leg);
   resetLegFields();
+  if(draft.kind==='parlay')$('#legOddsIn').value=draft.type==='moneyline'?'':'-110';
   buildLegList();buildGames();buildSides();refreshForm();
   $('#legList').scrollIntoView({block:'nearest'});
 });
@@ -1384,7 +1566,10 @@ $('#saveBet').addEventListener('click',()=>{
   const odds=parseNum($('#oddsIn').value);
   const stake=parseNum($('#stakeIn').value);
   let bet;
-  if(draft.kind==='teaser'){
+  if(draft.kind==='parlay'){
+    bet={id,created:Date.now(),kind:'parlay',odds:$('#oddsIn').value.trim()===''?null:odds,stake:stake>0?stake:0,
+      legs:draft.legs.map((l,i)=>materialize(l,i))};
+  }else if(draft.kind==='teaser'){
     const points=parseNum($('#ptIn').value);
     bet={id,created:Date.now(),kind:'teaser',points:points,pleaser:draft.pleaser,push:draft.push,odds,stake:stake>0?stake:0,
       legs:draft.legs.map((l,i)=>materialize(l,i))};
@@ -1402,6 +1587,7 @@ $('#saveBet').addEventListener('click',()=>{
 /* ---------- backup and feed test ---------- */
 function backupText(){return JSON.stringify(S)}
 $('#moreBtn').addEventListener('click',()=>{
+  buildAlertSettings();
   $('#feedInfo').textContent=feedState.ok?'Last good update at '+fmtHr.format(new Date(feedState.ok))+'.':(feedState.err?'Last attempt failed: '+feedState.err+'.':'No scores requested yet.');
   $('#feedTestOut').textContent='';$('#bkMsg').textContent='';$('#bk').value='';
   scrim.hidden=false;more.hidden=false;more.focus();
@@ -1437,12 +1623,141 @@ $('#bkRestore').addEventListener('click',()=>{
   if(!d||!Array.isArray(d.bets)){$('#bkMsg').textContent='That text isn’t a valid backup.';return}
   if(!armedRestore){armedRestore=true;btn.classList.add('armed');btn.textContent='Tap again to replace my bets and history';return}
   armedRestore=false;btn.classList.remove('armed');btn.textContent='Restore from this text';
-  S=normalize(d);save();ui.open=null;lastSig='';render();refresh().then(schedule);
+  S=normalize(d);S.seen={};save();ui.open=null;lastSig='';render();refresh().then(schedule);
   $('#bkMsg').textContent='Restored '+S.bets.length+' bets and '+S.history.length+' history records.';
 });
 $('#feedBtn').addEventListener('click',()=>{refresh().then(schedule)});
 
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+
+/* ---------- alerts ---------- */
+const LEGW={i:'not started',c:'covering',o:'on the line',n:'not covering',w:'locked in',l:'busted'};
+let alertMute=false;
+function stateOf(it){
+  const e=it.e,o={p:e.phase,s:e.st,w:e.word};
+  if(isTk(it.b))o.l=e.legs.map(le=>le.phase==='pre'?'i':le.phase==='final'?(le.outcome==='won'?'W':le.outcome==='lost'?'L':'P'):le.locked?(le.locked==='win'?'w':'l'):(le.st==='win'?'c':le.st==='push'?'o':'n')).join('');
+  return o;
+}
+const sameState=(a,b)=>a.p===b.p&&a.s===b.s&&a.w===b.w&&(a.l||'')===(b.l||'');
+function describeChange(it,prev,cur){
+  const b=it.b,e=it.e,tk=isTk(b);
+  const a={id:b.id,t:Date.now(),st:e.st,title:tk?ticketTitle(b):pickTitle(b,it.g)};
+  const where=tk?'':' · '+scoreText(it.g);
+  if(cur.p==='final'&&prev.p!=='final'){
+    a.kind='final';
+    const amt=e.stake>0&&e.net!=null?' '+CW.smoney(e.net):'';
+    let head=e.outcome==='won'?'Won'+amt:e.outcome==='lost'?'Lost'+amt:'Push';
+    if(e.outcome==='won'&&e.net===null)head='Won. Payout reduced, check your book';
+    const why=tk&&e.outcome==='lost'?deadText(it)+(e.early?' · settled early':''):e.sub;
+    a.msg=head+(why?' · '+why:'');
+    return a;
+  }
+  if(tk){
+    const pl=prev.l||'',cl=cur.l||'',ch=[];
+    for(let i=0;i<cl.length;i++)if(pl[i]!==cl[i])ch.push(i);
+    if(!ch.length)return null;
+    const starts=ch.every(i=>pl[i]==='i');
+    const bits=ch.map(i=>{
+      const le=e.legs[i],t=pickTitle(le.leg,le.game,le.adj),c=cl[i];
+      if(pl[i]==='i')return t+' is under way';
+      if(c==='W')return t+' won';
+      if(c==='L')return t+' lost';
+      if(c==='P')return t+' landed on the number';
+      return t+' is now '+LEGW[c];
+    });
+    a.kind=starts?'start':'flip';
+    if(starts)a.st='idle';
+    a.msg=bits.join('. ')+' · '+e.covering+' of '+e.n+' covering';
+    return a;
+  }
+  if(prev.p==='pre'&&cur.p==='live'){a.kind='start';a.st='idle';a.msg='Game is under way'+where;return a}
+  a.kind='flip';
+  a.msg='Now '+e.word.toLowerCase()+(e.sub?' · '+e.sub:'')+where;
+  return a;
+}
+function checkAlerts(real){
+  const seen=S.seen;let dirty=false;const fresh=[];
+  real.forEach(it=>{
+    const id=it.b.id,cur=stateOf(it),prev=seen[id];
+    if(!prev){seen[id]=cur;dirty=true;return}
+    if(sameState(prev,cur))return;
+    seen[id]=cur;dirty=true;
+    if(alertMute||(it.b.created&&Date.now()-it.b.created<60000))return;
+    const a=describeChange(it,prev,cur);if(a)fresh.push(a);
+  });
+  Object.keys(seen).forEach(id=>{if(!S.bets.some(b=>b.id===id)){delete seen[id];dirty=true}});
+  const N=S.notif;
+  const shown=fresh.filter(a=>N.on&&N[a.kind]);
+  if(shown.length){
+    S.log=shown.slice().reverse().concat(S.log).slice(0,40);dirty=true;
+    announce(shown);
+  }
+  if(dirty)save();
+}
+function announce(list){
+  if(list.length>3)toast({st:'idle',kind:'flip',t:Date.now(),title:list.length+' bets changed',msg:'Open the menu (three dots) to see each one under Alerts.'});
+  else list.forEach(toast);
+  cue(list.find(a=>a.kind==='final')||list[0]);
+}
+function toast(a){
+  const box=$('#toasts'),st=ICON[a.st]?a.st:'idle';
+  const el=document.createElement('div');
+  el.className='toast st-'+st;
+  if(a.id)el.dataset.bet=a.id;
+  el.innerHTML='<span class="tbadge">'+ICON[st]+'</span><div class="tbody"><b>'+esc(a.title)+'</b><span>'+esc(a.msg)+'</span><span class="ttime">'+esc(fmtHr.format(new Date(a.t)))+'</span></div><button type="button" class="tclose" aria-label="Dismiss alert">&times;</button>';
+  box.prepend(el);
+  while(box.children.length>3)box.lastChild.remove();
+  setTimeout(()=>el.remove(),a.kind==='final'?14000:9000);
+}
+$('#toasts').addEventListener('click',ev=>{
+  const el=ev.target.closest('.toast');if(!el)return;
+  const id=el.dataset.bet;el.remove();
+  if(ev.target.closest('.tclose')||!id)return;
+  const card=$('#main').querySelector('[data-key="'+id+'"]');
+  if(card)card.scrollIntoView({block:'center',behavior:'smooth'});
+});
+let AC=null;
+function unlockAudio(){
+  try{
+    if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;AC=new C()}
+    if(AC.state==='suspended')AC.resume();
+  }catch(e){}
+}
+['pointerdown','touchend','keydown'].forEach(n=>document.addEventListener(n,unlockAudio,{passive:true}));
+function tone(freq,at,dur,vol){
+  const o=AC.createOscillator(),g=AC.createGain(),t0=AC.currentTime+at;
+  o.type='sine';o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(vol,t0+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+dur+0.03);
+}
+const TONES={win:[[660,0],[880,.15]],loss:[[520,0],[392,.15]],push:[[587,0],[587,.17]],idle:[[740,0]]};
+const DONE={win:[[523,0],[659,.13],[784,.26]],loss:[[392,0],[330,.15],[262,.3]],push:[[587,0],[587,.17]],idle:[[740,0]]};
+function cue(a){
+  const n=S.notif;
+  if(n.sound&&AC&&AC.state==='running'){
+    try{(a.kind==='final'?DONE:TONES)[a.st||'idle'].forEach(x=>tone(x[0],x[1],.2,.22))}catch(e){}
+  }
+  if(n.vibrate&&navigator.vibrate){try{navigator.vibrate(a.st==='loss'?[140,70,140]:[90])}catch(e){}}
+}
+const SWITCHES=[['on','Alerts'],['flip','Status changes'],['start','Game starts'],['final','Final results'],['sound','Sound']].concat(navigator.vibrate?[['vibrate','Vibrate']]:[]);
+function buildAlertSettings(){
+  $('#alertSwitches').innerHTML=SWITCHES.map(x=>'<button type="button" class="sw" role="switch" aria-checked="'+!!S.notif[x[0]]+'" data-sw="'+x[0]+'"'+(x[0]!=='on'&&!S.notif.on?' disabled':'')+'><span>'+x[1]+'</span><i aria-hidden="true"></i></button>').join('');
+  $('#alertLog').innerHTML=S.log.length?S.log.map(a=>{const st=ICON[a.st]?a.st:'idle';return '<li class="st-'+st+'"><span class="tbadge">'+ICON[st]+'</span><div><b>'+esc(a.title)+'</b><span>'+esc(a.msg)+'</span><em>'+esc(fmtTime(new Date(a.t).toISOString()))+'</em></div></li>'}).join(''):'<li class="none">Nothing yet. Changes show up here as they happen.</li>';
+  $('#alertClear').hidden=!S.log.length;
+}
+$('#alertSwitches').addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-sw]');if(!b||b.disabled)return;
+  unlockAudio();
+  const k=b.dataset.sw;S.notif[k]=!S.notif[k];save();buildAlertSettings();
+});
+$('#alertTest').addEventListener('click',()=>{
+  unlockAudio();
+  const a={st:'win',kind:'flip',t:Date.now(),title:'Test alert',msg:'This is how a status change looks. Tap to dismiss.'};
+  toast(a);cue(a);
+});
+$('#alertClear').addEventListener('click',()=>{S.log=[];save();buildAlertSettings()});
 
 /* ---------- history ---------- */
 const hist=$('#hist');
@@ -1450,7 +1765,7 @@ const hf={period:'all',type:'all',open:null,confirm:null};
 let histDirty=false;
 const OST={won:'win',lost:'loss',push:'push'};
 const OWORD={won:'Won',lost:'Lost',push:'Push'};
-const TYPEWORD={spread:'Spread',moneyline:'Moneyline',total:'Total',teaser:'Teaser'};
+const TYPEWORD={spread:'Spread',moneyline:'Moneyline',total:'Total',teaser:'Teaser',parlay:'Parlay'};
 const fmtHDay=new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric'});
 const fmtHDayY=new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 const fmtDate=ms=>{const d=new Date(ms);return (d.getFullYear()===new Date().getFullYear()?fmtHDay:fmtHDayY).format(d)};
@@ -1459,8 +1774,8 @@ const tmInfo=t=>({abbr:t.abbr,name:t.name,color:t.color||'',logo:t.logo||''});
 const scoreText=g=>g.away.abbr+' '+(g.away.score==null?0:g.away.score)+' @ '+g.home.abbr+' '+(g.home.score==null?0:g.home.score);
 /* A frozen copy of a settled bet. It keeps working after the bet is cleared or deleted from the main list. */
 function ledgerRec(it){
-  const b=it.b,e=it.e,isT=b.kind==='teaser';
-  const r={id:b.id,placed:b.created||0,kind:isT?'teaser':'single',odds:b.odds,stake:Number(b.stake)||0,outcome:e.outcome,net:e.net==null?null:e.net};
+  const b=it.b,e=it.e,isT=isTk(b);
+  const r={id:b.id,placed:b.created||0,kind:isT?b.kind:'single',odds:e.odds!=null?e.odds:b.odds,stake:Number(b.stake)||0,outcome:e.outcome,net:e.net==null?null:e.net};
   let starts=[];
   if(!isT){
     const g=it.g;
@@ -1468,9 +1783,9 @@ function ledgerRec(it){
     r.tms=(b.type==='total'?[g.away,g.home]:[teamOf(g,b.side)]).map(tmInfo);
     if(g.start)starts.push(Date.parse(g.start));
   }else{
-    r.type='teaser';
+    r.type=b.kind;
     const lg=[];b.legs.forEach(l=>{if(lg.indexOf(l.league)<0)lg.push(l.league)});
-    r.leagues=lg;r.title=CW.plain(b.points)+'-point '+(b.pleaser?'pleaser':'teaser');r.detail=b.legs.length+' legs';
+    r.leagues=lg;r.title=ticketTitle(b);r.detail=b.legs.length+' legs';
     r.legs=e.legs.map(le=>({t:pickTitle(le.leg,le.game,le.adj),g:scoreText(le.game),r:le.phase==='final'?le.outcome:(le.locked==='win'?'won':le.locked==='loss'?'lost':'')}));
     it.games.forEach(g=>{if(g.start)starts.push(Date.parse(g.start))});
   }
@@ -1516,12 +1831,12 @@ function recHTML(r){
   const lead=tms.length>1?'<span class="pair">'+tms.map(t=>crest(t,20)).join('')+'</span>':tms.map(t=>crest(t,26)).join('');
   const money=r.stake>0?(r.net==null?'payout?':CW.smoney(r.net)):'';
   const chips=r.leagues.map(l=>'<span class="chip">'+(LG[l]?LG[l].label:esc(l))+'</span>').join('');
-  const kind=r.kind==='teaser'?r.detail:TYPEWORD[r.type];
+  const kind=r.kind==='single'?TYPEWORD[r.type]:r.detail;
   const oddsTxt=(r.stake>0?CW.money(r.stake)+' at ':'')+CW.odds(r.odds);
   let h='<article class="card st-'+st+' final" data-key="'+esc(r.id)+'"><div class="face" role="button" tabindex="0" aria-expanded="'+open+'" data-h="open" data-id="'+esc(r.id)+'">'
     +'<div class="row"><div class="chips">'+chips+'<span class="kind">'+esc(kind)+'</span></div><div class="when">'+esc(fmtDate(r.date))+'</div></div>'
     +'<div class="pickrow"><div class="pick">'+lead+'<span>'+esc(r.title)+'</span></div><span class="hres">'+OWORD[r.outcome]+(money?'<b class="'+(r.net>0?'up':r.net<0?'down':'')+'">'+esc(money)+'</b>':'')+'</span></div>'
-    +'<div class="foot"><span>'+esc(oddsTxt)+'</span><span>'+esc(r.kind==='teaser'?'':r.detail)+'</span></div></div>';
+    +'<div class="foot"><span>'+esc(oddsTxt)+'</span><span>'+esc(r.kind==='single'?r.detail:'')+'</span></div></div>';
   if(open){
     h+='<div class="editor">';
     if(r.legs)h+='<ul class="legs">'+r.legs.map(l=>{const ls=OST[l.r]||'idle';return '<li class="leg st-'+ls+'"><span class="lbadge">'+ICON[ls]+'</span><div class="lmain"><div class="ltitle"><span>'+esc(l.t)+'</span></div><div class="lsub">'+esc(l.g)+'</div></div></li>'}).join('')+'</ul>';
@@ -1548,7 +1863,7 @@ function buildHist(){
   if(!S.history.length){
     h='<div class="hempty"><strong style="display:block;font:800 22px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin-bottom:4px">Nothing settled yet</strong>Bets land here on their own when their games finish, and stay even after you clear them from the main list.</div>';
   }else{
-    h+='<div class="hfilters">'+segHTML('period','Time period',[['all','All time'],['30','30 days'],['7','7 days']],hf.period)+segHTML('type','Bet kind',[['all','All bets'],['single','Singles'],['teaser','Teasers']],hf.type)+'</div>';
+    h+='<div class="hfilters">'+segHTML('period','Time period',[['all','All time'],['30','30 days'],['7','7 days']],hf.period)+segHTML('type','Bet kind',[['all','All'],['single','Singles'],['teaser','Teasers'],['parlay','Parlays']],hf.type)+'</div>';
     if(!list.length)h+='<div class="hempty">No settled bets in this view.</div>';
     else{
       const netCls=s.net>0?'st-win':s.net<0?'st-loss':'st-idle';
@@ -1557,7 +1872,7 @@ function buildHist(){
       h+='<div class="hstats"><div class="hnet '+netCls+'"><div class="lbl">Net profit</div><div class="big">'+CW.smoney(s.net)+'</div></div>'
         +stat('Record',recText(s))+stat('Win rate',s.pct==null?'—':Math.round(s.pct*100)+'%')+stat('ROI',roi)+'</div>';
       if(s.unk)h+='<p class="note">'+s.unk+' bet'+(s.unk>1?'s have':' has')+' a reduced payout and is not in the profit total yet. Open it below and enter what the book paid.</p>';
-      h+=breakdown(list,'By kind of bet',r=>TYPEWORD[r.type]||'Other',['Spread','Moneyline','Total','Teaser']);
+      h+=breakdown(list,'By kind of bet',r=>TYPEWORD[r.type]||'Other',['Spread','Moneyline','Total','Teaser','Parlay']);
       h+=breakdown(list,'By sport',r=>r.leagues.length===1&&LG[r.leagues[0]]?LG[r.leagues[0]].label:'Mixed',Object.keys(LG).map(k=>LG[k].label));
       h+='<div class="sec"><span>Bets · '+list.length+'</span></div>'+list.map(recHTML).join('');
     }
