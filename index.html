@@ -376,7 +376,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
   <div class="sheet-body">
     <fieldset>
       <legend>Alerts</legend>
-      <p class="under" style="margin:0 0 6px">When a bet changes status, like going from covering to not covering, Cover Watch shows an alert at the top of the screen with a sound. iPhone pauses web apps when the screen locks or you switch to another app, so anything that changed in the meantime shows up the moment you come back. Sound starts after your first tap in the app.</p>
+      <p class="under" style="margin:0 0 6px">When a bet changes status, like going from covering to not covering, or a team scores in a game you bet on, Cover Watch shows an alert at the top of the screen with a sound. iPhone pauses web apps when the screen locks or you switch to another app, so anything that changed in the meantime shows up the moment you come back. Sound starts after your first tap in the app.</p>
       <div id="alertSwitches"></div>
       <div class="btnrow"><button id="alertTest" type="button">Send a test alert</button></div>
       <ul id="alertLog" class="alog" aria-label="Recent alerts"></ul>
@@ -686,8 +686,10 @@ function normalize(d){
   return {v:2,bets:Array.isArray(d.bets)?d.bets:[],manual:Array.isArray(d.manual)?d.manual:[],
     overrides:d.overrides&&typeof d.overrides==='object'?d.overrides:{},
     showSamples:d.showSamples!==false,history:Array.isArray(d.history)?d.history.filter(r=>r&&r.id&&r.outcome):[],lastLeague:d.lastLeague||'nfl',
-    notif:Object.assign({on:true,flip:true,start:true,final:true,sound:true,vibrate:true},d.notif&&typeof d.notif==='object'?d.notif:{}),
-    seen:d.seen&&typeof d.seen==='object'&&!Array.isArray(d.seen)?d.seen:{},log:Array.isArray(d.log)?d.log.filter(a=>a&&a.title).slice(0,40):[],
+    notif:Object.assign({on:true,flip:true,score:true,start:true,final:true,sound:true,vibrate:true},d.notif&&typeof d.notif==='object'?d.notif:{}),
+    seen:d.seen&&typeof d.seen==='object'&&!Array.isArray(d.seen)?d.seen:{},
+    seenScores:d.seenScores&&typeof d.seenScores==='object'&&!Array.isArray(d.seenScores)?d.seenScores:{},
+    log:Array.isArray(d.log)?d.log.filter(a=>a&&a.title).slice(0,60):[],
     lastPoints:d.lastPoints||13,lastPush:d.lastPush||'reduce',lastTeaserOdds:d.lastTeaserOdds||'',lastEnterAs:d.lastEnterAs||'teased'};
 }
 let storageOK=true;
@@ -902,7 +904,7 @@ async function refresh(extraLeagues){
   (extraLeagues||[]).forEach(l=>{if(lgs.indexOf(l)<0)lgs.push(l)});
   if(lgs.length){await Promise.all(lgs.map(l=>loadLeague(l)));syncAfterFeed()}
   feedState.busy=false;refreshing=false;
-  render();renderFeed();
+  render();renderFeed();awayFlag=false;
   if(!sheet.hidden){buildGames();refreshForm()}
 }
 function schedule(){
@@ -1623,7 +1625,7 @@ $('#bkRestore').addEventListener('click',()=>{
   if(!d||!Array.isArray(d.bets)){$('#bkMsg').textContent='That text isn’t a valid backup.';return}
   if(!armedRestore){armedRestore=true;btn.classList.add('armed');btn.textContent='Tap again to replace my bets and history';return}
   armedRestore=false;btn.classList.remove('armed');btn.textContent='Restore from this text';
-  S=normalize(d);S.seen={};save();ui.open=null;lastSig='';render();refresh().then(schedule);
+  S=normalize(d);S.seen={};S.seenScores={};save();ui.open=null;lastSig='';render();refresh().then(schedule);
   $('#bkMsg').textContent='Restored '+S.bets.length+' bets and '+S.history.length+' history records.';
 });
 $('#feedBtn').addEventListener('click',()=>{refresh().then(schedule)});
@@ -1639,10 +1641,35 @@ function stateOf(it){
   return o;
 }
 const sameState=(a,b)=>a.p===b.p&&a.s===b.s&&a.w===b.w&&(a.l||'')===(b.l||'');
-function describeChange(it,prev,cur){
+const gamesOf=it=>legsOf(it.b).map(l=>l.gameKey);
+const LS_AWAY='coverwatch.leftAt';
+const awayFor=()=>{try{const t=Number(localStorage.getItem(LS_AWAY))||0;return t>0&&Date.now()-t>90000}catch(e){return false}};
+let awayFlag=awayFor();
+const FB={1:'extra point',3:'field goal',6:'touchdown',7:'touchdown',8:'touchdown + 2-point try'};
+function scoreLabel(lg,d){
+  if(LG[lg]&&LG[lg].football)return FB[d]||(d===2?'two points':null);
+  if(lg==='nba'||lg==='cbb')return d===1?'free throw':d===2?'basket':d===3?'three-pointer':null;
+  if(lg==='nhl')return d===1?'goal':null;
+  if(lg==='mlb')return d===1?'run scores':null;
+  return null;
+}
+function scorePhrase(g,da,dh,away){
+  const A=g.away.abbr,H=g.home.abbr;
+  if(!away&&da>0&&dh===0){const l=scoreLabel(g.league,da);if(l)return A+' '+l}
+  if(!away&&dh>0&&da===0){const l=scoreLabel(g.league,dh);if(l)return H+' '+l}
+  const bits=[];if(da>0)bits.push(A+' +'+da);if(dh>0)bits.push(H+' +'+dh);
+  return bits.join(' · ')+(away?' while you were away':'');
+}
+function scoredFor(it,scored){
+  const out=[];
+  gamesOf(it).forEach(k=>{if(scored[k]&&out.indexOf(scored[k].phrase)<0)out.push(scored[k].phrase)});
+  return out.join(' · ');
+}
+function describeChange(it,prev,cur,sc){
   const b=it.b,e=it.e,tk=isTk(b);
   const a={id:b.id,t:Date.now(),st:e.st,title:tk?ticketTitle(b):pickTitle(b,it.g)};
   const where=tk?'':' · '+scoreText(it.g);
+  const lead=sc?sc+' · ':'';
   if(cur.p==='final'&&prev.p!=='final'){
     a.kind='final';
     const amt=e.stake>0&&e.net!=null?' '+CW.smoney(e.net):'';
@@ -1667,37 +1694,73 @@ function describeChange(it,prev,cur){
     });
     a.kind=starts?'start':'flip';
     if(starts)a.st='idle';
-    a.msg=bits.join('. ')+' · '+e.covering+' of '+e.n+' covering';
+    a.msg=(starts?'':lead)+bits.join('. ')+' · '+e.covering+' of '+e.n+' covering';
     return a;
   }
   if(prev.p==='pre'&&cur.p==='live'){a.kind='start';a.st='idle';a.msg='Game is under way'+where;return a}
   a.kind='flip';
-  a.msg='Now '+e.word.toLowerCase()+(e.sub?' · '+e.sub:'')+where;
+  a.msg=lead+'Now '+e.word.toLowerCase()+(e.sub?' · '+e.sub:'')+where;
   return a;
 }
 function checkAlerts(real){
-  const seen=S.seen;let dirty=false;const fresh=[];
+  const seen=S.seen,seenG=S.seenScores,N=S.notif;
+  let dirty=false;const fresh=[];
+  /* Scoring plays: compare each followed game's score with the last one seen. */
+  const mine={},scored={};
+  real.forEach(it=>{
+    if(it.e.phase==='final')return;
+    const gs=isTk(it.b)?it.games:[it.g];
+    legsOf(it.b).forEach((ent,i)=>{
+      const k=ent.gameKey,g=gs[i];
+      if(!k||k==='demo'||k.indexOf('man:')===0||!g)return;
+      const m=mine[k]||(mine[k]={g:g,its:[],old:false});
+      if(m.its.indexOf(it)<0)m.its.push(it);
+      if(!(it.b.created&&Date.now()-it.b.created<60000))m.old=true;
+    });
+  });
+  Object.keys(mine).forEach(k=>{
+    const g=mine[k].g,a=Number(g.away.score)||0,h=Number(g.home.score)||0,prev=seenG[k];
+    if(prev&&(prev.a!==a||prev.h!==h||prev.p!==g.status)){
+      const da=a-prev.a,dh=h-prev.h;
+      if(!alertMute&&mine[k].old&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,awayFlag),g:g,its:mine[k].its};
+    }
+    if(!prev||prev.a!==a||prev.h!==h||prev.p!==g.status){seenG[k]={a:a,h:h,p:g.status};dirty=true}
+  });
+  Object.keys(seenG).forEach(k=>{if(!mine[k]&&!S.bets.some(b=>legsOf(b).some(l=>l.gameKey===k))){delete seenG[k];dirty=true}});
+  /* Status changes, starts and finals. */
   real.forEach(it=>{
     const id=it.b.id,cur=stateOf(it),prev=seen[id];
     if(!prev){seen[id]=cur;dirty=true;return}
     if(sameState(prev,cur))return;
     seen[id]=cur;dirty=true;
     if(alertMute||(it.b.created&&Date.now()-it.b.created<60000))return;
-    const a=describeChange(it,prev,cur);if(a)fresh.push(a);
+    const a=describeChange(it,prev,cur,N.score?scoredFor(it,scored):'');
+    if(a){a.games=gamesOf(it);fresh.push(a)}
   });
   Object.keys(seen).forEach(id=>{if(!S.bets.some(b=>b.id===id)){delete seen[id];dirty=true}});
-  const N=S.notif;
-  const shown=fresh.filter(a=>N.on&&N[a.kind]);
+  /* A scoring play that did not change any bet's status gets its own alert. */
+  const wanted=a=>N.on&&N[a.kind];
+  const covered={};
+  fresh.filter(wanted).forEach(a=>a.games.forEach(k=>{covered[k]=1}));
+  Object.keys(scored).forEach(k=>{
+    if(covered[k])return;
+    const sc=scored[k],g=sc.g;
+    const sts=sc.its.map(i=>i.e.st).filter((x,i,arr)=>arr.indexOf(x)===i);
+    const names=sc.its.slice(0,3).map(i=>(isTk(i.b)?ticketTitle(i.b):pickTitle(i.b,i.g))+' '+i.e.word.toLowerCase());
+    fresh.push({id:sc.its[0].b.id,t:Date.now(),kind:'score',st:sts.length===1?sts[0]:'idle',title:sc.phrase,games:[k],
+      msg:scoreText(g)+(g.detail?' · '+g.detail:'')+' · '+names.join('; ')+(sc.its.length>3?'; +'+(sc.its.length-3)+' more':'')});
+  });
+  const shown=fresh.filter(wanted);
   if(shown.length){
-    S.log=shown.slice().reverse().concat(S.log).slice(0,40);dirty=true;
+    S.log=shown.slice().reverse().concat(S.log).slice(0,60);dirty=true;
     announce(shown);
   }
   if(dirty)save();
 }
 function announce(list){
-  if(list.length>3)toast({st:'idle',kind:'flip',t:Date.now(),title:list.length+' bets changed',msg:'Open the menu (three dots) to see each one under Alerts.'});
+  if(list.length>3)toast({st:'idle',kind:'flip',t:Date.now(),title:list.length+' new alerts',msg:'Open the menu (three dots), then Settings, to see each one.'});
   else list.forEach(toast);
-  cue(list.find(a=>a.kind==='final')||list[0]);
+  cue(list.find(a=>a.kind==='final')||list.find(a=>a.kind!=='score')||list[0]);
 }
 function toast(a){
   const box=$('#toasts'),st=ICON[a.st]?a.st:'idle';
@@ -1733,15 +1796,16 @@ function tone(freq,at,dur,vol){
   o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+dur+0.03);
 }
 const TONES={win:[[660,0],[880,.15]],loss:[[520,0],[392,.15]],push:[[587,0],[587,.17]],idle:[[740,0]]};
+const BLIP=[[988,0],[1319,.09]];
 const DONE={win:[[523,0],[659,.13],[784,.26]],loss:[[392,0],[330,.15],[262,.3]],push:[[587,0],[587,.17]],idle:[[740,0]]};
 function cue(a){
   const n=S.notif;
   if(n.sound&&AC&&AC.state==='running'){
-    try{(a.kind==='final'?DONE:TONES)[a.st||'idle'].forEach(x=>tone(x[0],x[1],.2,.22))}catch(e){}
+    try{(a.kind==='score'?BLIP:(a.kind==='final'?DONE:TONES)[a.st||'idle']).forEach(x=>tone(x[0],x[1],a.kind==='score'?.12:.2,.22))}catch(e){}
   }
   if(n.vibrate&&navigator.vibrate){try{navigator.vibrate(a.st==='loss'?[140,70,140]:[90])}catch(e){}}
 }
-const SWITCHES=[['on','Alerts'],['flip','Status changes'],['start','Game starts'],['final','Final results'],['sound','Sound']].concat(navigator.vibrate?[['vibrate','Vibrate']]:[]);
+const SWITCHES=[['on','Alerts'],['flip','Status changes'],['score','Scoring plays'],['start','Game starts'],['final','Final results'],['sound','Sound']].concat(navigator.vibrate?[['vibrate','Vibrate']]:[]);
 function buildAlertSettings(){
   $('#alertSwitches').innerHTML=SWITCHES.map(x=>'<button type="button" class="sw" role="switch" aria-checked="'+!!S.notif[x[0]]+'" data-sw="'+x[0]+'"'+(x[0]!=='on'&&!S.notif.on?' disabled':'')+'><span>'+x[1]+'</span><i aria-hidden="true"></i></button>').join('');
   $('#alertLog').innerHTML=S.log.length?S.log.map(a=>{const st=ICON[a.st]?a.st:'idle';return '<li class="st-'+st+'"><span class="tbadge">'+ICON[st]+'</span><div><b>'+esc(a.title)+'</b><span>'+esc(a.msg)+'</span><em>'+esc(fmtTime(new Date(a.t).toISOString()))+'</em></div></li>'}).join(''):'<li class="none">Nothing yet. Changes show up here as they happen.</li>';
@@ -1940,7 +2004,10 @@ $('#histCopy').addEventListener('click',async()=>{
 /* ---------- start ---------- */
 render();
 setInterval(render,1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){refresh().then(schedule)}else clearTimeout(pollT)});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){awayFlag=awayFor();refresh().then(schedule)}
+  else{clearTimeout(pollT);try{localStorage.setItem(LS_AWAY,String(Date.now()))}catch(e){}}
+});
 refresh().then(schedule);
 })();
 </script>
