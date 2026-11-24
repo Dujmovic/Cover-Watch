@@ -172,7 +172,10 @@ main{flex:1;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
 .fine{margin:18px 0 4px;font-size:12px;line-height:1.5;color:var(--muted)}
 .fine button{padding:0;border:0;background:none;color:var(--ink);font-size:12px;font-weight:600;text-decoration:underline;min-height:32px}
 
-.dock{padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
+.dock{display:flex;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg)}
+.dock .primary{flex:1;width:auto}
+.dock .secondary{flex:none;width:auto;min-height:50px;padding:0 16px;white-space:nowrap}
+.dock .secondary span{margin-left:6px;font-variant-numeric:tabular-nums;opacity:.65}
 .primary{width:100%;min-height:50px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;font-size:16px;letter-spacing:.02em}
 .primary:disabled{opacity:.35;cursor:not-allowed}
 .secondary{width:100%;min-height:46px;border-radius:12px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);font-weight:700}
@@ -227,6 +230,27 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
 .pair{display:inline-flex}
 .pair .crest+.crest{margin-left:-7px}
 
+/* History */
+#hist .pick{font-size:22px}
+.hfilters{display:grid;gap:8px;margin:2px 0 12px}
+.hstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 4px}
+.hnet{grid-column:1/-1;padding:12px 14px;border-radius:14px;background:var(--st-bg);color:var(--st)}
+.hnet .lbl{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hnet .big{margin-top:4px;font:900 44px/1 var(--display);font-variant-numeric:tabular-nums}
+.hstat{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);min-width:0}
+.hstat b{display:block;font:900 24px/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hstat span{display:block;margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.brk{list-style:none;margin:0 0 6px;padding:0}
+.brk li{display:flex;align-items:baseline;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:14px;font-variant-numeric:tabular-nums}
+.brk li:last-child{border-bottom:0}
+.brk li span:first-child{flex:1;font-weight:600}
+.brk .rec{color:var(--muted)}
+.brk b{min-width:76px;text-align:right}
+.brk .up,.hres b.up{color:var(--win)} .brk .down,.hres b.down{color:var(--loss)}
+.hres{display:inline-flex;align-items:baseline;gap:8px;font:800 18px/1 var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--st)}
+.hres b{font-weight:900;font-variant-numeric:tabular-nums}
+.hempty{margin:18px 0;text-align:center;color:var(--muted)}
+
 .flip{animation:flip .9s ease-out}
 @keyframes flip{0%{box-shadow:0 0 0 0 var(--st-solid);transform:scale(1.015)}100%{box-shadow:0 0 0 14px transparent;transform:scale(1)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
@@ -248,7 +272,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     <p id="net" class="net"></p>
   </header>
   <main id="main" aria-label="Your bets"></main>
-  <div class="dock"><button id="addBtn" class="primary" type="button">Add a bet</button></div>
+  <div class="dock"><button id="histBtn" class="secondary" type="button">History<span id="histCount"></span></button><button id="addBtn" class="primary" type="button">Add a bet</button></div>
 </div>
 
 <div id="scrim" class="scrim" hidden></div>
@@ -314,6 +338,12 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
   <div class="sheet-foot"><button id="saveBet" class="primary" type="button" disabled>Save bet</button></div>
 </section>
 
+<section id="hist" class="sheet" role="dialog" aria-modal="true" aria-labelledby="histTitle" tabindex="-1" hidden>
+  <div class="sheet-head"><h2 id="histTitle">History</h2><button id="histClose" class="x" type="button" aria-label="Close">&times;</button></div>
+  <div id="histBody" class="sheet-body"></div>
+  <div class="sheet-foot"><button id="histCopy" class="secondary" type="button">Copy for a spreadsheet</button><p id="histMsg" class="under" role="status"></p></div>
+</section>
+
 <section id="more" class="sheet" role="dialog" aria-modal="true" aria-labelledby="moreTitle" tabindex="-1" hidden>
   <div class="sheet-head"><h2 id="moreTitle">Backup and scores</h2><button id="moreClose" class="x" type="button" aria-label="Close">&times;</button></div>
   <div class="sheet-body">
@@ -325,7 +355,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     </fieldset>
     <fieldset>
       <legend>Backup</legend>
-      <p class="under" style="margin:0 0 8px">Bets are saved only on this phone, in this browser. Copy a backup now and then, and to move to a new phone.</p>
+      <p class="under" style="margin:0 0 8px">Bets and history are saved only on this phone, in this browser. Copy a backup now and then, and to move to a new phone.</p>
       <div class="btnrow"><button id="bkCopy" type="button">Copy backup</button><button id="bkShow" type="button">Show backup text</button></div>
       <textarea id="bk" class="bk" aria-label="Backup text" placeholder="Paste a backup here to restore it" spellcheck="false"></textarea>
       <div class="btnrow"><button id="bkRestore" type="button">Restore from this text</button></div>
@@ -534,7 +564,7 @@ function normalize(d){
   d=d||{};
   return {v:2,bets:Array.isArray(d.bets)?d.bets:[],manual:Array.isArray(d.manual)?d.manual:[],
     overrides:d.overrides&&typeof d.overrides==='object'?d.overrides:{},
-    showSamples:d.showSamples!==false,lastLeague:d.lastLeague||'nfl',
+    showSamples:d.showSamples!==false,history:Array.isArray(d.history)?d.history.filter(r=>r&&r.id&&r.outcome):[],lastLeague:d.lastLeague||'nfl',
     lastPoints:d.lastPoints||13,lastPush:d.lastPush||'reduce',lastTeaserOdds:d.lastTeaserOdds||'',lastEnterAs:d.lastEnterAs||'teased'};
 }
 let storageOK=true;
@@ -886,7 +916,11 @@ function scoreEditor(b,legIdx,g){
   return row('a',g.away,g.away.score||0)+row('h',g.home,g.home.score||0)+'<div class="seg" role="group" aria-label="Game status">'+seg+'</div>';
 }
 const HINT='<p class="hint">Scores update by themselves when live scores are reachable. What you enter here shows right away and holds until the feed reports a new score.</p>';
-function delBtn(b){return '<button type="button" class="danger'+(ui.confirm===b.id?' armed':'')+'" data-a="del" data-id="'+b.id+'">'+(ui.confirm===b.id?'Tap again to delete':'Delete this bet')+'</button>'}
+function delBtn(b){
+  const kept=S.history.some(r=>r.id===b.id);
+  const armed=ui.confirm===b.id;
+  return '<button type="button" class="danger'+(armed?' armed':'')+'" data-a="del" data-id="'+b.id+'">'+(armed?(kept?'Tap again to remove':'Tap again to delete'):(kept?'Remove from this list':'Delete this bet'))+'</button>'+(kept?'<p class="hint">It stays in History.</p>':'');
+}
 function singleEditor(b,g){return '<div class="editor">'+scoreEditor(b,null,g)+HINT+delBtn(b)+'</div>'}
 function ticketEditor(it){
   const b=it.b,seen={};
@@ -914,6 +948,7 @@ function holdNet(it){
 }
 function render(){
   const real=S.bets.map(b=>mk(b,false)).filter(Boolean);
+  syncLedger(real);
   const samples=S.showSamples?SAMPLES.map(b=>mk(b,true)).filter(Boolean):[];
   const counted=real.length?real:samples;
   const liveC=counted.filter(i=>i.e.phase==='live');
@@ -943,7 +978,7 @@ function render(){
   let empty='';
   if(!secs.length)empty='<div class="empty"><strong>No bets yet</strong>Add a bet to start tracking it.</div>';
   const warn=storageOK?'':'<p class="warnbox">This browser is not letting the app save anything, so bets will be lost when you close it. Open the app in a normal (not private) browser window.</p>';
-  const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable.<br>'
+  const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable. Settled bets are kept in History.<br>'
     +'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Show demo')+'</button>'
     +(settled.length?' · '+'<button type="button" data-a="clearSettled">Clear settled bets</button>':'')+'</p>';
   const sig=JSON.stringify([secs.map(s=>[s.title,s.note,s.items.map(i=>i.key)]),empty,fine,warn]);
@@ -969,6 +1004,9 @@ function render(){
   }
   if(changed&&focusSel){const f=main.querySelector(focusSel);if(f)f.focus({preventScroll:true})}
   renderFeed();
+  const hc=S.history.length?' \u00b7 '+S.history.length:'';
+  if($('#histCount').textContent!==hc)$('#histCount').textContent=hc;
+  if(histDirty){histDirty=false;const ae=document.activeElement;if(!hist.hidden&&!(ae&&ae.tagName==='INPUT'&&hist.contains(ae)))buildHist()}
 }
 function focusSelector(){
   const el=document.activeElement;
@@ -1221,12 +1259,12 @@ function openSheet(){
   scrim.hidden=false;sheet.hidden=false;sheet.focus();
   ensureLeague(draft.league);
 }
-function closeSheet(){scrim.hidden=true;sheet.hidden=true;more.hidden=true;$('#addBtn').focus()}
+function closeSheet(){scrim.hidden=true;sheet.hidden=true;more.hidden=true;hist.hidden=true;$('#addBtn').focus()}
 $('#addBtn').addEventListener('click',openSheet);
 $('#sheetClose').addEventListener('click',closeSheet);
 $('#moreClose').addEventListener('click',closeSheet);
 scrim.addEventListener('click',closeSheet);
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&(!sheet.hidden||!more.hidden))closeSheet()});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&(!sheet.hidden||!more.hidden||!hist.hidden))closeSheet()});
 
 $('#modeSeg').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-mode]');if(!b)return;
@@ -1397,12 +1435,192 @@ $('#bkRestore').addEventListener('click',()=>{
   let d;
   try{d=JSON.parse($('#bk').value)}catch(e){$('#bkMsg').textContent='That text isn’t a valid backup.';return}
   if(!d||!Array.isArray(d.bets)){$('#bkMsg').textContent='That text isn’t a valid backup.';return}
-  if(!armedRestore){armedRestore=true;btn.classList.add('armed');btn.textContent='Tap again to replace my bets';return}
+  if(!armedRestore){armedRestore=true;btn.classList.add('armed');btn.textContent='Tap again to replace my bets and history';return}
   armedRestore=false;btn.classList.remove('armed');btn.textContent='Restore from this text';
   S=normalize(d);save();ui.open=null;lastSig='';render();refresh().then(schedule);
-  $('#bkMsg').textContent='Restored '+S.bets.length+' bets.';
+  $('#bkMsg').textContent='Restored '+S.bets.length+' bets and '+S.history.length+' history records.';
 });
 $('#feedBtn').addEventListener('click',()=>{refresh().then(schedule)});
+
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+
+/* ---------- history ---------- */
+const hist=$('#hist');
+const hf={period:'all',type:'all',open:null,confirm:null};
+let histDirty=false;
+const OST={won:'win',lost:'loss',push:'push'};
+const OWORD={won:'Won',lost:'Lost',push:'Push'};
+const TYPEWORD={spread:'Spread',moneyline:'Moneyline',total:'Total',teaser:'Teaser'};
+const fmtHDay=new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric'});
+const fmtHDayY=new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+const fmtDate=ms=>{const d=new Date(ms);return (d.getFullYear()===new Date().getFullYear()?fmtHDay:fmtHDayY).format(d)};
+const c2=n=>Math.round(n*100)/100;
+const tmInfo=t=>({abbr:t.abbr,name:t.name,color:t.color||'',logo:t.logo||''});
+const scoreText=g=>g.away.abbr+' '+(g.away.score==null?0:g.away.score)+' @ '+g.home.abbr+' '+(g.home.score==null?0:g.home.score);
+/* A frozen copy of a settled bet. It keeps working after the bet is cleared or deleted from the main list. */
+function ledgerRec(it){
+  const b=it.b,e=it.e,isT=b.kind==='teaser';
+  const r={id:b.id,placed:b.created||0,kind:isT?'teaser':'single',odds:b.odds,stake:Number(b.stake)||0,outcome:e.outcome,net:e.net==null?null:e.net};
+  let starts=[];
+  if(!isT){
+    const g=it.g;
+    r.type=b.type;r.leagues=[g.league];r.title=pickTitle(b,g);r.detail=scoreText(g);
+    r.tms=(b.type==='total'?[g.away,g.home]:[teamOf(g,b.side)]).map(tmInfo);
+    if(g.start)starts.push(Date.parse(g.start));
+  }else{
+    r.type='teaser';
+    const lg=[];b.legs.forEach(l=>{if(lg.indexOf(l.league)<0)lg.push(l.league)});
+    r.leagues=lg;r.title=CW.plain(b.points)+'-point '+(b.pleaser?'pleaser':'teaser');r.detail=b.legs.length+' legs';
+    r.legs=e.legs.map(le=>({t:pickTitle(le.leg,le.game,le.adj),g:scoreText(le.game),r:le.phase==='final'?le.outcome:(le.locked==='win'?'won':le.locked==='loss'?'lost':'')}));
+    it.games.forEach(g=>{if(g.start)starts.push(Date.parse(g.start))});
+  }
+  starts=starts.filter(x=>!isNaN(x));
+  r.date=starts.length?Math.max.apply(null,starts):(b.created||Date.now());
+  return r;
+}
+function syncLedger(real){
+  const idx={};S.history.forEach((r,i)=>{idx[r.id]=i});
+  const drop={};let changed=false;
+  real.forEach(it=>{
+    if(it.b.noLedger)return;
+    const i=idx[it.b.id];
+    if(it.e.phase==='final'){
+      const rec=ledgerRec(it);
+      if(i==null){rec.settledAt=Date.now();rec.auto=true;S.history.push(rec);changed=true}
+      else if(!S.history[i].edited){
+        const old=S.history[i];rec.settledAt=old.settledAt;rec.auto=true;
+        if(JSON.stringify(rec)!==JSON.stringify(old)){S.history[i]=rec;changed=true}
+      }
+    }else if(i!=null&&!S.history[i].edited){drop[it.b.id]=1;changed=true}
+  });
+  if(Object.keys(drop).length)S.history=S.history.filter(r=>!drop[r.id]);
+  if(changed){save();histDirty=true}
+}
+function ledgerStats(list){
+  let w=0,l=0,p=0,net=0,staked=0,unk=0;
+  list.forEach(r=>{
+    if(r.outcome==='won')w++;else if(r.outcome==='lost')l++;else p++;
+    if(r.net==null){if(r.stake>0)unk++}
+    else{net+=r.net;if(r.stake>0)staked+=r.stake}
+  });
+  net=c2(net);
+  return {n:list.length,w:w,l:l,p:p,net:net,staked:staked,unk:unk,pct:(w+l)?w/(w+l):null,roi:staked>0?net/staked:null};
+}
+function histList(){
+  const days=hf.period==='all'?0:+hf.period,cut=Date.now()-days*86400000;
+  return S.history.filter(r=>(!days||r.date>=cut)&&(hf.type==='all'||r.kind===hf.type)).sort((a,b)=>b.date-a.date||(b.settledAt||0)-(a.settledAt||0));
+}
+const recText=t=>t.w+'–'+t.l+(t.p?'–'+t.p:'');
+function recHTML(r){
+  const st=OST[r.outcome]||'idle',open=hf.open===r.id,tms=r.tms||[];
+  const lead=tms.length>1?'<span class="pair">'+tms.map(t=>crest(t,20)).join('')+'</span>':tms.map(t=>crest(t,26)).join('');
+  const money=r.stake>0?(r.net==null?'payout?':CW.smoney(r.net)):'';
+  const chips=r.leagues.map(l=>'<span class="chip">'+(LG[l]?LG[l].label:esc(l))+'</span>').join('');
+  const kind=r.kind==='teaser'?r.detail:TYPEWORD[r.type];
+  const oddsTxt=(r.stake>0?CW.money(r.stake)+' at ':'')+CW.odds(r.odds);
+  let h='<article class="card st-'+st+' final" data-key="'+esc(r.id)+'"><div class="face" role="button" tabindex="0" aria-expanded="'+open+'" data-h="open" data-id="'+esc(r.id)+'">'
+    +'<div class="row"><div class="chips">'+chips+'<span class="kind">'+esc(kind)+'</span></div><div class="when">'+esc(fmtDate(r.date))+'</div></div>'
+    +'<div class="pickrow"><div class="pick">'+lead+'<span>'+esc(r.title)+'</span></div><span class="hres">'+OWORD[r.outcome]+(money?'<b class="'+(r.net>0?'up':r.net<0?'down':'')+'">'+esc(money)+'</b>':'')+'</span></div>'
+    +'<div class="foot"><span>'+esc(oddsTxt)+'</span><span>'+esc(r.kind==='teaser'?'':r.detail)+'</span></div></div>';
+  if(open){
+    h+='<div class="editor">';
+    if(r.legs)h+='<ul class="legs">'+r.legs.map(l=>{const ls=OST[l.r]||'idle';return '<li class="leg st-'+ls+'"><span class="lbadge">'+ICON[ls]+'</span><div class="lmain"><div class="ltitle"><span>'+esc(l.t)+'</span></div><div class="lsub">'+esc(l.g)+'</div></div></li>'}).join('')+'</ul>';
+    h+='<div class="ed-game">Result</div><div class="seg" role="group" aria-label="Result">'+['won','lost','push'].map(k=>'<button type="button" data-h="res" data-id="'+esc(r.id)+'" data-v="'+k+'" aria-pressed="'+(r.outcome===k)+'">'+OWORD[k]+'</button>').join('')+'</div>';
+    h+='<div class="ed-game">Net profit or loss</div><div class="field"><span class="unit">$</span><input type="text" inputmode="decimal" autocomplete="off" data-h="net" data-id="'+esc(r.id)+'" value="'+(r.net==null?'':r.net)+'" placeholder="What you won or lost" aria-label="Net amount in dollars"></div>';
+    h+='<p class="hint">'+(r.net==null?'A tie reduced this payout, so enter what the book actually paid, minus your stake.':'Change the result or amount if your book graded it differently.')+'</p>';
+    const armed=hf.confirm===r.id;
+    h+='<button type="button" class="danger'+(armed?' armed':'')+'" data-h="del" data-id="'+esc(r.id)+'">'+(armed?'Tap again to delete from history':'Delete from history')+'</button></div>';
+  }
+  return h+'</article>';
+}
+function breakdown(list,title,keyFn,order){
+  const m={};list.forEach(r=>{const k=keyFn(r);(m[k]=m[k]||[]).push(r)});
+  const keys=Object.keys(m);if(keys.length<2)return '';
+  const rank=k=>{const i=order.indexOf(k);return i<0?99:i};
+  keys.sort((a,b)=>rank(a)-rank(b));
+  return '<div class="sec"><span>'+title+'</span></div><ul class="brk">'+keys.map(k=>{const t=ledgerStats(m[k]);return '<li><span>'+esc(k)+'</span><span class="rec">'+recText(t)+'</span><b class="'+(t.net>0?'up':t.net<0?'down':'')+'">'+(t.staked>0||t.net?CW.smoney(t.net):'')+'</b></li>'}).join('')+'</ul>';
+}
+function buildHist(){
+  const body=$('#histBody'),sc=body.scrollTop;
+  const list=histList(),s=ledgerStats(list);
+  const segHTML=(h,label,opts,cur)=>'<div class="seg" role="group" aria-label="'+label+'">'+opts.map(o=>'<button type="button" data-h="'+h+'" data-v="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>').join('')+'</div>';
+  let h='';
+  if(!S.history.length){
+    h='<div class="hempty"><strong style="display:block;font:800 22px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin-bottom:4px">Nothing settled yet</strong>Bets land here on their own when their games finish, and stay even after you clear them from the main list.</div>';
+  }else{
+    h+='<div class="hfilters">'+segHTML('period','Time period',[['all','All time'],['30','30 days'],['7','7 days']],hf.period)+segHTML('type','Bet kind',[['all','All bets'],['single','Singles'],['teaser','Teasers']],hf.type)+'</div>';
+    if(!list.length)h+='<div class="hempty">No settled bets in this view.</div>';
+    else{
+      const netCls=s.net>0?'st-win':s.net<0?'st-loss':'st-idle';
+      const stat=(l,v)=>'<div class="hstat"><b>'+v+'</b><span>'+l+'</span></div>';
+      const roi=s.roi==null?'—':(s.roi>0?'+':s.roi<0?MINUS:'')+Math.abs(Math.round(s.roi*1000)/10)+'%';
+      h+='<div class="hstats"><div class="hnet '+netCls+'"><div class="lbl">Net profit</div><div class="big">'+CW.smoney(s.net)+'</div></div>'
+        +stat('Record',recText(s))+stat('Win rate',s.pct==null?'—':Math.round(s.pct*100)+'%')+stat('ROI',roi)+'</div>';
+      if(s.unk)h+='<p class="note">'+s.unk+' bet'+(s.unk>1?'s have':' has')+' a reduced payout and is not in the profit total yet. Open it below and enter what the book paid.</p>';
+      h+=breakdown(list,'By kind of bet',r=>TYPEWORD[r.type]||'Other',['Spread','Moneyline','Total','Teaser']);
+      h+=breakdown(list,'By sport',r=>r.leagues.length===1&&LG[r.leagues[0]]?LG[r.leagues[0]].label:'Mixed',Object.keys(LG).map(k=>LG[k].label));
+      h+='<div class="sec"><span>Bets · '+list.length+'</span></div>'+list.map(recHTML).join('');
+    }
+  }
+  body.innerHTML=h;body.scrollTop=sc;
+}
+function ledgerTSV(list){
+  const clean=v=>String(v==null?'':v).replace(/[\t\r\n]+/g,' ');
+  const pad2=n=>String(n).padStart(2,'0');
+  const day=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())};
+  const rows=[['Date','Kind','Sport','Bet','Details','Odds','Stake','Result','Net']];
+  list.slice().reverse().forEach(r=>rows.push([day(r.date),TYPEWORD[r.type]||r.type,r.leagues.map(l=>LG[l]?LG[l].label:l).join('/'),r.title,
+    r.legs?r.legs.map(l=>l.t+(l.r?' ('+l.r+')':'')).join('; '):r.detail,r.odds,r.stake||'',OWORD[r.outcome],r.net==null?'':r.net]));
+  return rows.map(a=>a.map(clean).join('\t')).join('\n');
+}
+function openHist(){
+  $('#histMsg').textContent='';hf.open=null;hf.confirm=null;
+  scrim.hidden=false;hist.hidden=false;hist.focus();buildHist();
+}
+$('#histBtn').addEventListener('click',openHist);
+$('#histClose').addEventListener('click',closeSheet);
+$('#histBody').addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-h]');if(!t||t.tagName==='INPUT')return;
+  const h=t.dataset.h,id=t.dataset.id;
+  if(h==='period'){hf.period=t.dataset.v;hf.open=null;buildHist();return}
+  if(h==='type'){hf.type=t.dataset.v;hf.open=null;buildHist();return}
+  if(h==='open'){hf.open=hf.open===id?null:id;hf.confirm=null;buildHist();return}
+  const r=S.history.find(x=>x.id===id);if(!r)return;
+  if(h==='res'){
+    r.outcome=t.dataset.v;r.edited=true;
+    r.net=r.stake>0?(r.outcome==='won'?CW.profit(r.stake,r.odds):r.outcome==='lost'?-r.stake:0):0;
+    save();buildHist();return;
+  }
+  if(h==='del'){
+    if(hf.confirm!==id){hf.confirm=id;buildHist();return}
+    S.history=S.history.filter(x=>x.id!==id);
+    hf.open=null;hf.confirm=null;
+    /* If the bet is still on the main list, mark it so it is not re-added. */
+    const b=findBet(id);if(b&&mk(b,false)&&mk(b,false).e.phase==='final'){b.noLedger=true}
+    save();buildHist();render();return;
+  }
+});
+$('#histBody').addEventListener('keydown',ev=>{
+  if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('.face[data-h="open"]')){ev.preventDefault();ev.target.click()}
+});
+$('#histBody').addEventListener('change',ev=>{
+  const t=ev.target;if(!t.matches||!t.matches('input[data-h="net"]'))return;
+  const r=S.history.find(x=>x.id===t.dataset.id);if(!r)return;
+  const n=parseNum(t.value);
+  r.net=n==null?null:c2(n);r.edited=true;
+  save();buildHist();
+});
+$('#histCopy').addEventListener('click',async()=>{
+  const list=histList(),msg=$('#histMsg');
+  if(!list.length){msg.textContent='Nothing to copy in this view.';return}
+  const t=ledgerTSV(list);
+  try{await navigator.clipboard.writeText(t);msg.textContent='Copied '+list.length+' bet'+(list.length>1?'s':'')+'. Paste into Google Sheets or Excel.'}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy')}catch(x){}
+    ta.remove();msg.textContent=ok?'Copied '+list.length+' bets. Paste into Google Sheets or Excel.':'Couldn’t copy automatically on this browser.';
+  }
+});
 
 /* ---------- start ---------- */
 render();
