@@ -176,6 +176,8 @@ main{flex:1;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
 .dock .primary{flex:1;width:auto}
 .dock .secondary{flex:none;width:auto;min-height:50px;padding:0 16px;white-space:nowrap}
 .dock .secondary span{margin-left:6px;font-variant-numeric:tabular-nums;opacity:.65}
+.dock .primary{white-space:nowrap}
+@media (max-width:360px){.dock{gap:8px;padding-left:12px;padding-right:12px}.dock .secondary{padding:0 11px;font-size:14px}.dock .secondary span{margin-left:4px}}
 .primary{width:100%;min-height:50px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;font-size:16px;letter-spacing:.02em}
 .primary:disabled{opacity:.35;cursor:not-allowed}
 .secondary{width:100%;min-height:46px;border-radius:12px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);font-weight:700}
@@ -254,6 +256,40 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
 .hres{display:inline-flex;align-items:baseline;gap:8px;font:800 18px/1 var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--st)}
 .hres b{font-weight:900;font-variant-numeric:tabular-nums}
 .hempty{margin:18px 0;text-align:center;color:var(--muted)}
+.hstats .hstat b{font-size:clamp(17px,6vw,22px)}
+.spl li .roi{min-width:52px;text-align:right;color:var(--muted)}
+.xhead{margin-top:22px}
+.xread{min-height:40px;margin:0 0 6px;font-size:14px;line-height:1.35;font-variant-numeric:tabular-nums;color:var(--muted)}
+.xread b{color:var(--ink);font-weight:700}
+.xread .up,.xread b.up,.sec .up,.xtile b.up{color:var(--win)} .xread .down,.xread b.down,.sec .down,.xtile b.down{color:var(--loss)}
+.xchart{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.xzero{stroke:var(--line);stroke-width:1.2;stroke-dasharray:4 4}
+.xline{fill:none;stroke:var(--idle-solid);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.xc-win .xline{stroke:var(--win-solid)} .xc-loss .xline{stroke:var(--loss-solid)}
+.xdot{fill:var(--card);stroke:var(--idle-solid);stroke-width:1.4}
+.xc-win .xdot{stroke:var(--win-solid)} .xc-loss .xdot{stroke:var(--loss-solid)}
+.xvl{stroke:var(--muted);stroke-width:1;opacity:.55}
+.xmk{fill:var(--ink);stroke:var(--card);stroke-width:2}
+.xax{font:600 10px var(--body);fill:var(--muted);font-variant-numeric:tabular-nums}
+.calnav{display:flex;align-items:center;justify-content:space-between;margin:2px 0 8px}
+.calnav b{font:800 20px/1 var(--display);letter-spacing:.04em;text-transform:uppercase}
+.calnav button{min-width:46px;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:22px;font-weight:700;line-height:1}
+.calnav button:disabled{opacity:.3}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calgrid .dow{text-align:center;font:700 11px var(--body);letter-spacing:.08em;color:var(--muted);padding:2px 0 4px}
+.calgrid .d{min-height:50px;padding:4px 0;border-radius:10px;border:1px solid transparent;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font:600 14px/1 var(--body);color:var(--ink);font-variant-numeric:tabular-nums}
+.calgrid .d.none{color:var(--muted)}
+.calgrid .d.empty{visibility:hidden}
+.calgrid button.d{border-color:var(--line);background:var(--card)}
+.calgrid .d.today{border-color:var(--muted);border-style:dashed}
+.calgrid button.d[aria-pressed="true"]{border:2px solid var(--ink);border-style:solid}
+.calgrid .cdot{display:block;width:11px;height:11px;border-radius:50%;background:var(--idle-solid)}
+.calgrid .cdot.win{background:var(--win-solid)} .calgrid .cdot.loss{background:var(--loss-solid)} .calgrid .cdot.push{background:var(--push-solid)}
+.xgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.xtile{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);min-width:0}
+.xtile b{display:block;font:900 24px/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.xtile .xl{display:block;margin-top:4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.xtile .xs{display:block;margin-top:3px;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .flip{animation:flip .9s ease-out}
 @keyframes flip{0%{box-shadow:0 0 0 0 var(--st-solid);transform:scale(1.015)}100%{box-shadow:0 0 0 14px transparent;transform:scale(1)}}
@@ -295,7 +331,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     <p id="net" class="net"></p>
   </header>
   <main id="main" aria-label="Your bets"></main>
-  <div class="dock"><button id="histBtn" class="secondary" type="button">History<span id="histCount"></span></button><button id="addBtn" class="primary" type="button">Add a bet</button></div>
+  <div class="dock"><button id="histBtn" class="secondary" type="button">History<span id="histCount"></span></button><button id="statsBtn" class="secondary" type="button">Stats</button><button id="addBtn" class="primary" type="button">Add a bet</button></div>
 </div>
 
 <div id="toasts" class="toasts" role="region" aria-label="Bet alerts" aria-live="polite"></div>
@@ -373,6 +409,11 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
   <div class="sheet-head"><h2 id="histTitle">History</h2><button id="histClose" class="x" type="button" aria-label="Close">&times;</button></div>
   <div id="histBody" class="sheet-body"></div>
   <div class="sheet-foot"><button id="histCopy" class="secondary" type="button">Copy for a spreadsheet</button><p id="histMsg" class="under" role="status"></p></div>
+</section>
+
+<section id="stats" class="sheet" role="dialog" aria-modal="true" aria-labelledby="statsTitle" tabindex="-1" hidden>
+  <div class="sheet-head"><h2 id="statsTitle">Stats</h2><button id="statsClose" class="x" type="button" aria-label="Close">&times;</button></div>
+  <div id="statsBody" class="sheet-body"></div>
 </section>
 
 <section id="more" class="sheet" role="dialog" aria-modal="true" aria-labelledby="moreTitle" tabindex="-1" hidden>
@@ -1167,7 +1208,7 @@ function render(){
   renderFeed();
   const hc=S.history.length?' \u00b7 '+S.history.length:'';
   if($('#histCount').textContent!==hc)$('#histCount').textContent=hc;
-  if(histDirty){histDirty=false;const ae=document.activeElement;if(!hist.hidden&&!(ae&&ae.tagName==='INPUT'&&hist.contains(ae)))buildHist()}
+  if(histDirty){histDirty=false;const ae=document.activeElement;if(!hist.hidden&&!(ae&&ae.tagName==='INPUT'&&hist.contains(ae)))buildHist();if(!statsSheet.hidden)buildStats()}
 }
 function focusSelector(){
   const el=document.activeElement;
@@ -1462,12 +1503,12 @@ function openSheet(){
   scrim.hidden=false;sheet.hidden=false;sheet.focus();
   ensureLeague(draft.league);
 }
-function closeSheet(){scrim.hidden=true;sheet.hidden=true;more.hidden=true;hist.hidden=true;$('#addBtn').focus()}
+function closeSheet(){scrim.hidden=true;sheet.hidden=true;more.hidden=true;hist.hidden=true;statsSheet.hidden=true;$('#addBtn').focus()}
 $('#addBtn').addEventListener('click',openSheet);
 $('#sheetClose').addEventListener('click',closeSheet);
 $('#moreClose').addEventListener('click',closeSheet);
 scrim.addEventListener('click',closeSheet);
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&(!sheet.hidden||!more.hidden||!hist.hidden))closeSheet()});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&(!sheet.hidden||!more.hidden||!hist.hidden||!statsSheet.hidden))closeSheet()});
 
 $('#modeSeg').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-mode]');if(!b||b.dataset.mode===draft.kind)return;
@@ -2028,7 +2069,7 @@ function ledgerRec(it){
   let starts=[];
   if(!isT){
     const g=it.g;
-    r.type=b.type;r.leagues=[g.league];r.title=pickTitle(b,g);r.detail=scoreText(g);
+    r.type=b.type;r.leagues=[g.league];r.title=pickTitle(b,g);r.detail=scoreText(g);r.side=b.side;if(b.type==='spread')r.line=Number(b.line);
     r.tms=(b.type==='total'?[g.away,g.home]:[teamOf(g,b.side)]).map(tmInfo);
     if(g.start)starts.push(Date.parse(g.start));
   }else{
@@ -2185,6 +2226,225 @@ $('#histCopy').addEventListener('click',async()=>{
     ta.remove();msg.textContent=ok?'Copied '+list.length+' bets. Paste into Google Sheets or Excel.':'Couldn’t copy automatically on this browser.';
   }
 });
+
+/* ---------- stats (profit over time, calendar, splits, streaks) ---------- */
+const statsSheet=$('#stats');
+const sx={period:'all',month:null,day:null,sel:null,pts:[]};
+const zz=n=>String(n).padStart(2,'0');
+const dayKey=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+zz(d.getMonth()+1)+'-'+zz(d.getDate())};
+const keyDate=k=>{const p=k.split('-');return new Date(+p[0],+p[1]-1,+p[2]||1)};
+const fmtMonth=new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric'});
+const fmtShort=new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric'});
+const DOWNAME=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const pctTxt=roi=>roi==null?'—':(roi>0?'+':roi<0?MINUS:'')+Math.abs(Math.round(roi*1000)/10)+'%';
+const upDown=n=>n>0?'up':n<0?'down':'';
+const mean=a=>a.length?c2(a.reduce((x,y)=>x+y,0)/a.length):null;
+/* Older records do not store the side or the line, so read them back from the title and the score text. */
+function recSide(r){
+  if(r.kind!=='single')return null;
+  if(r.side)return r.side;
+  if(r.type==='total')return /^Under/i.test(r.title||'')?'under':'over';
+  const m=/^(.+?) (\d+) @ (.+?) (\d+)$/.exec(r.detail||''),t=r.tms&&r.tms[0];
+  if(m&&t)return t.abbr===m[3]?'home':t.abbr===m[1]?'away':null;
+  return null;
+}
+function recLine(r){
+  if(r.kind!=='single'||r.type!=='spread')return null;
+  if(r.line!=null&&!isNaN(r.line))return Number(r.line);
+  const m=/(PK|[−+-]\d+(?:\.\d+)?)$/.exec(r.title||'');if(!m)return null;
+  if(m[1]==='PK')return 0;
+  return (m[1][0]==='+'?1:-1)*parseFloat(m[1].slice(1));
+}
+function recRole(r){
+  if(r.kind!=='single')return null;
+  if(r.type==='spread'){const ln=recLine(r);return ln==null?null:ln<0?'Favorite':ln>0?'Underdog':'Pick’em'}
+  if(r.type==='moneyline')return r.odds<0?'Favorite':r.odds>0?'Underdog':null;
+  return null;
+}
+function xList(){
+  const days=sx.period==='all'?0:+sx.period,cut=Date.now()-days*86400000;
+  return S.history.filter(r=>!days||r.date>=cut).sort((a,b)=>a.date-b.date||(a.settledAt||0)-(b.settledAt||0));
+}
+function splitBlock(list,title,keyFn,order){
+  const m={};list.forEach(r=>{const k=keyFn(r);if(k)(m[k]=m[k]||[]).push(r)});
+  const keys=Object.keys(m);if(keys.length<2)return '';
+  keys.sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib)});
+  return '<div class="sec"><span>'+title+'</span></div><ul class="brk spl">'+keys.map(k=>{
+    const t=ledgerStats(m[k]);
+    return '<li><span>'+esc(k)+'</span><span class="rec">'+recText(t)+'</span><span class="roi">'+pctTxt(t.roi)+'</span><b class="'+upDown(t.net)+'">'+(t.staked>0||t.net?CW.smoney(t.net):'')+'</b></li>';
+  }).join('')+'</ul>';
+}
+function splitsHTML(list){
+  const stakes=list.map(r=>r.stake).filter(x=>x>0).sort((a,b)=>a-b);
+  const med=stakes.length?(stakes.length%2?stakes[(stakes.length-1)/2]:(stakes[stakes.length/2-1]+stakes[stakes.length/2])/2):0;
+  let h='';
+  h+=splitBlock(list,'Favorite or underdog',recRole,['Favorite','Pick’em','Underdog']);
+  h+=splitBlock(list,'Over or under',r=>r.kind==='single'&&r.type==='total'?(recSide(r)==='under'?'Under':'Over'):null,['Over','Under']);
+  h+=splitBlock(list,'Home or away pick',r=>{if(r.kind!=='single'||r.type==='total')return null;const s=recSide(r);return s==='home'?'Home team':s==='away'?'Away team':null},['Home team','Away team']);
+  h+=splitBlock(list,'Day of the week',r=>DOWNAME[new Date(r.date).getDay()],[1,2,3,4,5,6,0].map(i=>DOWNAME[i]));
+  h+=splitBlock(list,'Stake size',r=>r.stake>0?(r.stake>med?'Over '+CW.money(med):CW.money(med)+' or less'):null,['Over '+CW.money(med),CW.money(med)+' or less']);
+  if(!h)h='<p class="note">Splits show up once you have settled bets on both sides, such as favorites and underdogs, or overs and unders. Teasers and parlays count only in the day and stake splits.</p>';
+  else h+='<p class="note">Favorite, over or under and home or away look at single bets only. A spread of 0 is a pick’em.</p>';
+  return '<div class="sec xhead"><span>Deeper splits</span></div>'+h;
+}
+/* Profit over time: one point per bet, in the order the games were played. */
+function chartHTML(list){
+  const pts=[];let cum=0;
+  list.forEach(r=>{if(r.net==null)return;cum=c2(cum+r.net);pts.push({r:r,cum:cum})});
+  sx.pts=pts;
+  let h='<div class="sec xhead"><span>Profit over time</span></div>';
+  if(pts.length<2)return h+'<p class="note">The chart appears once two settled bets have a known result.</p>';
+  const n=pts.length,W=360,H=182,L=10,R=10,T=18,B=36;
+  const vals=[0].concat(pts.map(p=>p.cum));
+  const hiV=Math.max.apply(null,vals),loV=Math.min.apply(null,vals);
+  let hi=hiV,lo=loV;if(hi===lo){hi+=1;lo-=1}
+  const pad=(hi-lo)*.1;hi+=pad;lo-=pad;
+  const X=i=>L+(W-L-R)*i/n,Y=v=>T+(H-T-B)*(hi-v)/(hi-lo);
+  const d=vals.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+  const cls=cum>0?'win':cum<0?'loss':'idle';
+  if(sx.sel==null||sx.sel<1||sx.sel>n)sx.sel=n;
+  const dots=n<=40?pts.map((p,i)=>'<circle class="xdot" cx="'+X(i+1).toFixed(1)+'" cy="'+Y(p.cum).toFixed(1)+'" r="2.4"/>').join(''):'';
+  const zero=Y(0);
+  h+='<div class="xread" id="xread" aria-live="off">'+readText(sx.sel)+'</div>'
+    +'<svg class="xchart xc-'+cls+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Profit over time: from $0 to '+CW.smoney(cum)+' after '+n+' bets. Highest '+CW.smoney(hiV)+', lowest '+CW.smoney(loV)+'.">'
+    +'<line class="xzero" x1="'+L+'" x2="'+(W-R)+'" y1="'+zero.toFixed(1)+'" y2="'+zero.toFixed(1)+'"/>'
+    +'<path class="xline" d="'+d+'"/>'+dots
+    +'<line class="xvl" id="xvl" y1="'+T+'" y2="'+(H-B)+'" x1="'+X(sx.sel).toFixed(1)+'" x2="'+X(sx.sel).toFixed(1)+'"/>'
+    +'<circle class="xmk" id="xmk" r="5" cx="'+X(sx.sel).toFixed(1)+'" cy="'+Y(pts[sx.sel-1].cum).toFixed(1)+'"/>'
+    +'<text class="xax" x="'+L+'" y="11">'+(hiV===0?'$0':CW.smoney(hiV))+'</text>'
+    +(loV!==hiV?'<text class="xax" x="'+L+'" y="'+(H-B+13)+'">'+(loV===0?'$0':CW.smoney(loV))+'</text>':'')
+    +'<text class="xax" x="'+L+'" y="'+(H-5)+'">'+esc(fmtShort.format(new Date(pts[0].r.date)))+'</text>'
+    +'<text class="xax" text-anchor="end" x="'+(W-R)+'" y="'+(H-5)+'">'+esc(fmtShort.format(new Date(pts[n-1].r.date)))+'</text>'
+    +'</svg>';
+  sx.geo={W:W,L:L,R:R,T:T,H:H,B:B,hi:hi,lo:lo,n:n};
+  return h+'<p class="note">Each point is one bet. Touch or drag the chart to see a bet.</p>';
+}
+function readText(i){
+  const p=sx.pts[i-1];if(!p)return '';
+  const r=p.r;
+  return '<b>'+esc(fmtDate(r.date))+'</b> · '+esc(r.title)+' · <span class="'+upDown(r.net)+'">'+CW.smoney(r.net)+'</span><br>Total <b class="'+upDown(p.cum)+'">'+CW.smoney(p.cum)+'</b> after '+i+' bet'+(i>1?'s':'');
+}
+function moveMark(i){
+  const g=sx.geo,p=sx.pts[i-1];if(!g||!p)return;
+  sx.sel=i;
+  const x=(g.L+(g.W-g.L-g.R)*i/g.n).toFixed(1),y=(g.T+(g.H-g.T-g.B)*(g.hi-p.cum)/(g.hi-g.lo)).toFixed(1);
+  const vl=$('#xvl'),mk=$('#xmk'),rd=$('#xread');
+  if(vl){vl.setAttribute('x1',x);vl.setAttribute('x2',x)}
+  if(mk){mk.setAttribute('cx',x);mk.setAttribute('cy',y)}
+  if(rd)rd.innerHTML=readText(i);
+}
+function calHTML(){
+  const byDay={};S.history.forEach(r=>{const k=dayKey(r.date);(byDay[k]=byDay[k]||[]).push(r)});
+  const keys=Object.keys(byDay).sort();
+  if(!keys.length)return '';
+  const curM=dayKey(Date.now()).slice(0,7),minM=keys[0].slice(0,7),maxM=keys[keys.length-1].slice(0,7)>curM?keys[keys.length-1].slice(0,7):curM;
+  if(!sx.month||sx.month<minM||sx.month>maxM)sx.month=keys[keys.length-1].slice(0,7)<=maxM?keys[keys.length-1].slice(0,7):maxM;
+  const y=+sx.month.slice(0,4),m=+sx.month.slice(5,7)-1;
+  const first=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate(),today=dayKey(Date.now());
+  const sum=recs=>c2(recs.reduce((t,r)=>t+(r.net==null?0:r.net),0));
+  let green=0,red=0,bets=0,net=0;
+  let cells='';
+  ['S','M','T','W','T','F','S'].forEach(c=>{cells+='<div class="dow" aria-hidden="true">'+c+'</div>'});
+  for(let i=0;i<first;i++)cells+='<div class="d empty" aria-hidden="true"></div>';
+  for(let d=1;d<=dim;d++){
+    const k=sx.month+'-'+zz(d),recs=byDay[k];
+    if(!recs){cells+='<div class="d none'+(k===today?' today':'')+'"><span>'+d+'</span></div>';continue}
+    const t=sum(recs),known=recs.some(r=>r.net!=null),st=!known?'idle':t>0?'win':t<0?'loss':'push';
+    if(st==='win')green++;else if(st==='loss')red++;
+    bets+=recs.length;net+=t;
+    const lbl=fmtDate(keyDate(k).getTime())+': '+recs.length+' bet'+(recs.length>1?'s':'')+', '+(known?(t>0?'up ':t<0?'down ':'even ')+(t?CW.money(Math.abs(t)):''):'result pending');
+    cells+='<button type="button" class="d has'+(k===today?' today':'')+'" data-x="day" data-v="'+k+'" aria-pressed="'+(sx.day===k)+'" aria-label="'+esc(lbl)+'"><span>'+d+'</span><i class="cdot '+st+'"></i></button>';
+  }
+  let h='<div class="sec xhead"><span>Calendar</span></div>'
+    +'<div class="calnav"><button type="button" data-x="prev" aria-label="Previous month"'+(sx.month<=minM?' disabled':'')+'>&lsaquo;</button><b>'+esc(fmtMonth.format(new Date(y,m,1)))+'</b><button type="button" data-x="next" aria-label="Next month"'+(sx.month>=maxM?' disabled':'')+'>&rsaquo;</button></div>'
+    +'<div class="calgrid">'+cells+'</div>';
+  h+='<p class="note">'+(bets?CW.smoney(net)+' · '+bets+' bet'+(bets>1?'s':'')+' · '+green+' green day'+(green===1?'':'s')+' · '+red+' red day'+(red===1?'':'s'):'No settled bets this month.')+'</p>';
+  if(sx.day&&byDay[sx.day]&&sx.day.slice(0,7)===sx.month){
+    const recs=byDay[sx.day].slice().sort((a,b)=>(a.settledAt||0)-(b.settledAt||0)),t=sum(recs);
+    h+='<div class="sec"><span>'+esc(fmtDate(keyDate(sx.day).getTime()))+'</span><span class="'+upDown(t)+'">'+CW.smoney(t)+'</span></div><ul class="brk">'
+      +recs.map(r=>'<li><span>'+esc(r.title)+'</span><span class="rec">'+OWORD[r.outcome]+'</span><b class="'+upDown(r.net||0)+'">'+(r.stake>0?(r.net==null?'payout?':CW.smoney(r.net)):'')+'</b></li>').join('')+'</ul>';
+  }
+  return h;
+}
+function streakHTML(list){
+  let cur={k:null,n:0},bw=0,bl=0;
+  list.forEach(r=>{
+    if(r.outcome==='push')return;
+    if(cur.k===r.outcome)cur.n++;else cur={k:r.outcome,n:1};
+    if(cur.k==='won'&&cur.n>bw)bw=cur.n;
+    if(cur.k==='lost'&&cur.n>bl)bl=cur.n;
+  });
+  const known=list.filter(r=>r.net!=null);
+  let bigW=null,bigL=null;
+  known.forEach(r=>{if(r.net>0&&(!bigW||r.net>bigW.net))bigW=r;if(r.net<0&&(!bigL||r.net<bigL.net))bigL=r});
+  const days={};known.forEach(r=>{const k=dayKey(r.date);days[k]=c2((days[k]||0)+r.net)});
+  let bestD=null,worstD=null;
+  Object.keys(days).forEach(k=>{if(days[k]>0&&(!bestD||days[k]>days[bestD]))bestD=k;if(days[k]<0&&(!worstD||days[k]<days[worstD]))worstD=k});
+  const stakes=list.map(r=>r.stake).filter(x=>x>0);
+  const aw=mean(known.filter(r=>r.net>0).map(r=>r.net)),al=mean(known.filter(r=>r.net<0).map(r=>r.net)),as=mean(stakes);
+  const tile=(label,val,sub,cls)=>'<div class="xtile"><b class="'+(cls||'')+'">'+val+'</b><span class="xl">'+label+'</span>'+(sub?'<span class="xs">'+esc(sub)+'</span>':'')+'</div>';
+  const dsub=k=>fmtDate(keyDate(k).getTime());
+  return '<div class="sec xhead"><span>Streaks and extremes</span></div><div class="xgrid">'
+    +tile('Current streak',cur.k==='won'?'W'+cur.n:cur.k==='lost'?'L'+cur.n:'—','',cur.k==='won'?'up':cur.k==='lost'?'down':'')
+    +tile('Longest win streak',bw||'—','')
+    +tile('Longest losing streak',bl||'—','')
+    +tile('Biggest win',bigW?CW.smoney(bigW.net):'—',bigW?bigW.title+' · '+fmtDate(bigW.date):'',bigW?'up':'')
+    +tile('Biggest loss',bigL?CW.smoney(bigL.net):'—',bigL?bigL.title+' · '+fmtDate(bigL.date):'',bigL?'down':'')
+    +tile('Best day',bestD?CW.smoney(days[bestD]):'—',bestD?dsub(bestD):'',bestD?'up':'')
+    +tile('Worst day',worstD?CW.smoney(days[worstD]):'—',worstD?dsub(worstD):'',worstD?'down':'')
+    +tile('Average stake',as==null?'—':CW.money(as),'')
+    +tile('Average win',aw==null?'—':CW.smoney(aw),'', aw==null?'':'up')
+    +tile('Average loss',al==null?'—':CW.smoney(al),'', al==null?'':'down')
+    +'</div><p class="note">Pushes do not break a streak. Bets still waiting on a payout are left out of the money figures.</p>';
+}
+function buildStats(){
+  const body=$('#statsBody'),sc=body.scrollTop;
+  let h='';
+  if(!S.history.length){
+    h='<div class="hempty"><strong style="display:block;font:800 22px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin-bottom:4px">Nothing settled yet</strong>Stats start filling in once your first bet settles.</div>';
+  }else{
+    const list=xList(),s=ledgerStats(list);
+    const seg=(h2,label,opts,cur)=>'<div class="seg" role="group" aria-label="'+label+'">'+opts.map(o=>'<button type="button" data-x="'+h2+'" data-v="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>').join('')+'</div>';
+    h+='<div class="hfilters">'+seg('period','Time period',[['all','All time'],['30','30 days'],['7','7 days']],sx.period)+'</div>';
+    if(!list.length)h+='<div class="hempty">No settled bets in this view.</div>';
+    else{
+      const netCls=s.net>0?'st-win':s.net<0?'st-loss':'st-idle';
+      const stat=(l,v)=>'<div class="hstat"><b>'+v+'</b><span>'+l+'</span></div>';
+      h+='<div class="hstats"><div class="hnet '+netCls+'"><div class="lbl">Net profit</div><div class="big">'+CW.smoney(s.net)+'</div></div>'
+        +stat('ROI',pctTxt(s.roi))+stat('Staked',CW.money(s.staked))+stat('Record',recText(s))+'</div>';
+      if(s.unk)h+='<p class="note">'+s.unk+' bet'+(s.unk>1?'s have':' has')+' a reduced payout and is not in the money figures yet. Open it in History and enter what the book paid.</p>';
+      h+=chartHTML(list);
+    }
+    h+=calHTML();
+    if(list.length)h+=splitsHTML(list)+streakHTML(list);
+  }
+  body.innerHTML=h;body.scrollTop=sc;
+}
+function openStats(){
+  sx.month=null;sx.day=null;sx.sel=null;
+  scrim.hidden=false;statsSheet.hidden=false;statsSheet.focus();buildStats();
+}
+$('#statsBtn').addEventListener('click',openStats);
+$('#statsClose').addEventListener('click',closeSheet);
+$('#statsBody').addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-x]');if(!t)return;
+  const a=t.dataset.x;
+  if(a==='period'){sx.period=t.dataset.v;sx.sel=null;buildStats();return}
+  if(a==='prev'||a==='next'){
+    const y=+sx.month.slice(0,4),m=+sx.month.slice(5,7)-1+(a==='next'?1:-1),d=new Date(y,m,1);
+    sx.month=d.getFullYear()+'-'+zz(d.getMonth()+1);sx.day=null;buildStats();return;
+  }
+  if(a==='day'){sx.day=sx.day===t.dataset.v?null:t.dataset.v;buildStats();return}
+});
+function chartPick(ev){
+  const svg=ev.target.closest&&ev.target.closest('.xchart');if(!svg||!sx.geo)return;
+  const g=sx.geo,rect=svg.getBoundingClientRect();if(!rect.width)return;
+  const x=(ev.clientX-rect.left)/rect.width*g.W;
+  const i=Math.round((x-g.L)/(g.W-g.L-g.R)*g.n);
+  moveMark(Math.max(1,Math.min(g.n,i)));
+}
+$('#statsBody').addEventListener('pointerdown',chartPick);
+$('#statsBody').addEventListener('pointermove',ev=>{if(ev.pointerType!=='mouse'||ev.buttons||ev.target.closest('.xchart'))chartPick(ev)});
 
 /* ---------- start ---------- */
 render();
