@@ -276,9 +276,6 @@ function stateOf(it){
 }
 function scoreLabel(lg,d){
   if(LG[lg]&&LG[lg].football)return FB[d]||(d===2?'two points':null);
-  if(lg==='nba'||lg==='cbb')return d===1?'free throw':d===2?'basket':d===3?'three-pointer':null;
-  if(lg==='nhl')return d===1?'goal':null;
-  if(lg==='mlb')return d===1?'run scores':null;
   return null;
 }
 function scorePhrase(g,da,dh,away){
@@ -487,7 +484,7 @@ function detect(bets,games,seenIn,now,N){
     const g=mine[k].g,a=Number(g.away.score)||0,h=Number(g.home.score)||0,prev=seen.games[k];
     if(prev&&(prev.a!==a||prev.h!==h||prev.p!==g.status)){
       const da=a-prev.a,dh=h-prev.h;
-      if(mine[k].old&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,false),g:g,its:mine[k].its};
+      if(mine[k].old&&LG[g.league]&&LG[g.league].football&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,false),g:g,its:mine[k].its};
     }
     if(!prev||prev.a!==a||prev.h!==h||prev.p!==g.status)seen.games[k]={a:a,h:h,p:g.status};
   });

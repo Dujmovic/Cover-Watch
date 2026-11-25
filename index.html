@@ -1670,9 +1670,6 @@ let awayFlag=awayFor();
 const FB={1:'extra point',3:'field goal',6:'touchdown',7:'touchdown',8:'touchdown + 2-point try'};
 function scoreLabel(lg,d){
   if(LG[lg]&&LG[lg].football)return FB[d]||(d===2?'two points':null);
-  if(lg==='nba'||lg==='cbb')return d===1?'free throw':d===2?'basket':d===3?'three-pointer':null;
-  if(lg==='nhl')return d===1?'goal':null;
-  if(lg==='mlb')return d===1?'run scores':null;
   return null;
 }
 function scorePhrase(g,da,dh,away){
@@ -1744,7 +1741,7 @@ function checkAlerts(real){
     const g=mine[k].g,a=Number(g.away.score)||0,h=Number(g.home.score)||0,prev=seenG[k];
     if(prev&&(prev.a!==a||prev.h!==h||prev.p!==g.status)){
       const da=a-prev.a,dh=h-prev.h;
-      if(!alertMute&&mine[k].old&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,awayFlag),g:g,its:mine[k].its};
+      if(!alertMute&&mine[k].old&&LG[g.league]&&LG[g.league].football&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,awayFlag),g:g,its:mine[k].its};
     }
     if(!prev||prev.a!==a||prev.h!==h||prev.p!==g.status){seenG[k]={a:a,h:h,p:g.status};dirty=true}
   });
@@ -1827,7 +1824,7 @@ function cue(a){
   }
   if(n.vibrate&&navigator.vibrate){try{navigator.vibrate(a.st==='loss'?[140,70,140]:[90])}catch(e){}}
 }
-const SWITCHES=[['on','Alerts'],['flip','Status changes'],['score','Scoring plays'],['start','Game starts'],['final','Final results'],['sound','Sound']].concat(navigator.vibrate?[['vibrate','Vibrate']]:[]);
+const SWITCHES=[['on','Alerts'],['flip','Status changes'],['score','Scoring plays (football)'],['start','Game starts'],['final','Final results'],['sound','Sound']].concat(navigator.vibrate?[['vibrate','Vibrate']]:[]);
 function buildAlertSettings(){
   $('#alertSwitches').innerHTML=SWITCHES.map(x=>'<button type="button" class="sw" role="switch" aria-checked="'+!!S.notif[x[0]]+'" data-sw="'+x[0]+'"'+(x[0]!=='on'&&!S.notif.on?' disabled':'')+'><span>'+x[1]+'</span><i aria-hidden="true"></i></button>').join('');
   $('#alertLog').innerHTML=S.log.length?S.log.map(a=>{const st=ICON[a.st]?a.st:'idle';return '<li class="st-'+st+'"><span class="tbadge">'+ICON[st]+'</span><div><b>'+esc(a.title)+'</b><span>'+esc(a.msg)+'</span><em>'+esc(fmtTime(new Date(a.t).toISOString()))+'</em></div></li>'}).join(''):'<li class="none">Nothing yet. Changes show up here as they happen.</li>';

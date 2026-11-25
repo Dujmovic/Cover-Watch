@@ -160,7 +160,7 @@ function detect(bets,games,seenIn,now,N){
     const g=mine[k].g,a=Number(g.away.score)||0,h=Number(g.home.score)||0,prev=seen.games[k];
     if(prev&&(prev.a!==a||prev.h!==h||prev.p!==g.status)){
       const da=a-prev.a,dh=h-prev.h;
-      if(mine[k].old&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,false),g:g,its:mine[k].its};
+      if(mine[k].old&&LG[g.league]&&LG[g.league].football&&g.status==='live'&&da>=0&&dh>=0&&(da>0||dh>0))scored[k]={phrase:scorePhrase(g,da,dh,false),g:g,its:mine[k].its};
     }
     if(!prev||prev.a!==a||prev.h!==h||prev.p!==g.status)seen.games[k]={a:a,h:h,p:g.status};
   });
