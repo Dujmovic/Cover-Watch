@@ -388,7 +388,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     </fieldset>
     <fieldset>
       <legend>Lock-screen alerts</legend>
-      <p class="under" style="margin:0 0 8px">Sends the same alerts to your lock screen, even when the app is closed. It needs the free Cover Watch helper on Cloudflare.</p>
+      <p class="under" style="margin:0 0 8px">Sends the same alerts to your lock screen, even when the app is closed. It needs the free Cover Watch helper on Cloudflare. If someone else runs yours, ask them for the helper address and your own access code.</p>
       <p id="pushState" class="pstate" role="status"></p>
       <div id="pushFields">
         <label class="plab" for="pushUrl">Helper address</label>
@@ -721,7 +721,7 @@ let S=loadLocal();
 let FEED={};
 const ui={open:null,confirm:null};
 const LS_PUSH='coverwatch.push';
-let PUSH={url:'',token:'',on:false,vapid:'',sig:'',ep:''};
+let PUSH={url:'',token:'',on:false,vapid:'',sig:'',ep:'',uid:''};
 try{Object.assign(PUSH,JSON.parse(localStorage.getItem(LS_PUSH)||'{}'))}catch(e){}
 let pushT=null;
 function save(){
@@ -1857,11 +1857,20 @@ function pushBlock(){
   return '';
 }
 const helperBase=u=>String(u||'').trim().replace(/\/+$/,'');
+/* A random id, made once on this phone, so one helper can serve several people. */
+function pushUid(){
+  if(!/^[A-Za-z0-9_-]{16,64}$/.test(PUSH.uid||'')){
+    const a=crypto.getRandomValues(new Uint8Array(18));
+    PUSH.uid=btoa(String.fromCharCode.apply(null,a)).replace(/\+/g,'-').replace(/\//g,'_');
+    savePush();
+  }
+  return PUSH.uid;
+}
 async function helper(path,body,keepalive){
   let r;
   try{
     r=await fetch(helperBase(PUSH.url)+path,{method:body===undefined?'GET':'POST',cache:'no-store',keepalive:!!keepalive,
-      headers:{'x-access':PUSH.token,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+      headers:{'x-access':PUSH.token,'x-user':pushUid(),'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
   }catch(e){throw new Error('Couldn’t reach the helper. Check the address and your connection.')}
   let j=null;try{j=await r.json()}catch(e){}
   if(!r.ok||!j||j.ok===false)throw new Error(j&&j.error?j.error:'The helper answered with an error ('+r.status+'). Check the address.');
@@ -1908,11 +1917,12 @@ function schedulePushSync(){
 let pingAt=0;
 async function ensurePush(){
   if(!PUSH.on||pushBlock()||notifPerm()!=='granted')return;
+  const hadUid=!!PUSH.uid;pushUid();
   try{
     const reg=await pushReg();
     let sub=await reg.pushManager.getSubscription();
     if(!sub&&PUSH.vapid)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(PUSH.vapid)});
-    let force=!!sub&&sub.endpoint!==PUSH.ep;
+    let force=!hadUid||(!!sub&&sub.endpoint!==PUSH.ep);
     if(!force&&Date.now()-pingAt>300000){pingAt=Date.now();const j=await helper('/ping');if(!j.subscribed)force=true}
     await syncPush(force);
   }catch(e){}
@@ -1924,7 +1934,7 @@ function pushVisible(){
   if(!PUSH.on)return;
   if(document.hidden){presence(false);return}
   ensurePush();presence(true);
-  presT=setInterval(()=>presence(true),180000);
+  presT=setInterval(()=>presence(true),300000);
 }
 function buildPushSettings(){
   const on=PUSH.on,bad=pushBlock(),granted=notifPerm()==='granted';

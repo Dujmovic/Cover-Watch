@@ -337,7 +337,9 @@ const ESPN={nfl:['football','nfl',''],cfb:['football','college-football','&group
   cbb:['basketball','mens-college-basketball','&groups=50'],nhl:['hockey','nhl',''],mlb:['baseball','mlb','']};
 const HEAVY={cfb:1,cbb:1};
 const EMO={win:'🟢',loss:'🔴',push:'🟡',idle:'⚪'};
-const PRESENT_MS=240000;
+const PRESENT_MS=390000;
+const MAX_USERS=15;
+const DEAD_MS=30*864e5;
 
 /* ---------- small helpers ---------- */
 const enc=new TextEncoder();
@@ -521,28 +523,60 @@ function messagesFor(alerts,now){
   return alerts.map(a=>({title:(EMO[a.st]||EMO.idle)+' '+a.title,body:a.msg,tag:a.kind+':'+a.id+':'+hash(a.msg),t:a.t||now}));
 }
 
+/* ---------- people: one helper can serve a few friends ---------- */
+const UID=/^[A-Za-z0-9_-]{16,64}$/;
+const codesOf=env=>String(env.TOKEN||'').split(/[,\s]+/).filter(Boolean);
+async function codeId(code){return b64u(new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode(code)))).slice(0,12)}
+async function whichCode(env,given){
+  let hit='';
+  for(const c of codesOf(env)){if(same(given,c))hit=await codeId(c)}
+  return hit;
+}
+const readUsers=async env=>(await env.KV.get('users','json'))||[];
+
 /* ---------- the once-a-minute job ---------- */
 async function tick(env,opts){
   const now=opts&&opts.now||Date.now();
-  const cfg=await env.KV.get('cfg','json');
-  if(!cfg||!cfg.sub||!Array.isArray(cfg.bets)||!cfg.bets.length)return {ran:false,why:'nothing to watch'};
+  let ids=await readUsers(env);
+  if(!ids.length)return {ran:false,why:'nobody signed up'};
+  const valid=await Promise.all(codesOf(env).map(codeId));
+  const cfgs=await Promise.all(ids.map(id=>env.KV.get('u:'+id,'json')));
+  const cfgOf={};ids.forEach((id,i)=>{cfgOf[id]=cfgs[i]});
+  /* Forget people whose phone is gone and who have not been back in 30 days. */
+  const keep=ids.filter(id=>cfgOf[id]&&(cfgOf[id].sub||now-(cfgOf[id].t||0)<DEAD_MS));
+  if(keep.length!==ids.length){
+    for(const id of ids)if(keep.indexOf(id)<0){await env.KV.delete('u:'+id);await env.KV.delete('p:'+id)}
+    await env.KV.put('users',JSON.stringify(keep));
+    ids=keep;
+  }
   const raw=await env.KV.get('seen');
-  const seen0=raw?JSON.parse(raw):{};
-  seen0.bets=seen0.bets||{};seen0.games=seen0.games||{};
-  /* Skip bets that are done or are more than ten minutes from starting. */
-  const active=cfg.bets.filter(b=>{
-    const s=seen0.bets[b.id];
-    if(s&&s.p==='final')return false;
-    if(s&&s.p==='pre'){const st=startOf(b);if(st&&st-now>10*60000)return false}
-    return true;
+  const seenAll=raw?JSON.parse(raw):{};
+  seenAll.u=seenAll.u||{};
+  Object.keys(seenAll.u).forEach(k=>{if(ids.indexOf(k)<0)delete seenAll.u[k]});
+  const people=[];
+  ids.forEach(id=>{
+    const cfg=cfgOf[id];
+    if(!cfg||!cfg.sub||!Array.isArray(cfg.bets)||!cfg.bets.length||valid.indexOf(cfg.code)<0)return;
+    const s=seenAll.u[id]=seenAll.u[id]||{};s.bets=s.bets||{};s.games=s.games||{};
+    /* Skip bets that are done or are more than ten minutes from starting. */
+    const active=cfg.bets.filter(b=>{
+      const sb=s.bets[b.id];
+      if(sb&&sb.p==='final')return false;
+      if(sb&&sb.p==='pre'){const st=startOf(b);if(st&&st-now>10*60000)return false}
+      return true;
+    });
+    people.push({id,cfg,seen:s,active});
   });
-  if(!active.length)return {ran:false,why:'nothing active'};
+  const work=people.filter(p=>p.active.length);
+  if(!work.length)return {ran:false,why:'nothing active'};
+  const before=JSON.stringify(seenAll);
+  /* One list of scoreboards for everybody, so ESPN is asked once per league and day. */
   const jobs={};
-  active.forEach(b=>legsOf(b).forEach(l=>{
-    const p=l.gameKey.split(':');
+  work.forEach(p=>p.active.forEach(b=>legsOf(b).forEach(l=>{
+    const q=l.gameKey.split(':');
     const days=l.snap&&l.snap.qd?[l.snap.qd]:[etDay(0,now),etDay(-1,now)];
-    days.forEach(ds=>{const j=jobs[p[1]+'|'+ds]||(jobs[p[1]+'|'+ds]={lg:p[1],ds,ids:{}});j.ids[p[2]]=1});
-  }));
+    days.forEach(ds=>{const j=jobs[q[1]+'|'+ds]||(jobs[q[1]+'|'+ds]={lg:q[1],ds,ids:{}});j.ids[q[2]]=1});
+  })));
   let list=Object.keys(jobs).sort().map(k=>jobs[k]);
   /* College scoreboards are big. When several are due, take one per minute to stay inside the free CPU limit. */
   const heavy=list.filter(j=>HEAVY[j.lg]),light=list.filter(j=>!HEAVY[j.lg]);
@@ -556,25 +590,33 @@ async function tick(env,opts){
       pickGames(await r.json(),j.lg,j.ids,games);
     }catch(e){errs.push(j.lg+' '+j.ds+' '+(e&&e.message||e))}
   }));
-  const N=Object.assign({on:true,flip:true,score:true,start:true,final:true},cfg.notif||{});
-  const res=detect(cfg.bets,games,seen0,now,N);
+  const out={ran:true,people:work.length,fetched:list.length,found:Object.keys(games).length,alerts:0,errs,sent:{}};
+  const todo=[];
+  work.forEach(p=>{
+    const N=Object.assign({on:true,flip:true,score:true,start:true,final:true},p.cfg.notif||{});
+    const res=detect(p.cfg.bets,games,p.seen,now,N);
+    seenAll.u[p.id]=res.seen;
+    if(res.alerts.length){out.alerts+=res.alerts.length;todo.push({p,alerts:res.alerts})}
+  });
   /* Save what we have seen before sending anything, so a failed save can never cause repeat alerts. */
-  if(res.changed)await env.KV.put('seen',JSON.stringify(res.seen));
-  const out={ran:true,fetched:list.length,found:Object.keys(games).length,alerts:res.alerts.length,errs};
-  if(!res.alerts.length)return out;
-  const pres=await env.KV.get('pres','json');
-  if(pres&&pres.v&&now-pres.t<PRESENT_MS){out.skipped='app is open';return out}
-  const vapid=await getVapid(env);
-  const codes=[];let why='';
-  for(const m of messagesFor(res.alerts,now)){
-    try{const x=await sendPush(cfg.sub,vapid,m);codes.push(x.status);if(x.text)why=x.text}catch(e){codes.push(0);why=String(e&&e.message||e).slice(0,160)}
+  if(JSON.stringify(seenAll)!==before)await env.KV.put('seen',JSON.stringify(seenAll));
+  if(!todo.length)return out;
+  let vapid=null,wrote=false;
+  for(const t of todo){
+    const pres=await env.KV.get('p:'+t.p.id,'json');
+    if(pres&&pres.v&&now-pres.t<PRESENT_MS){out.skipped=(out.skipped||0)+1;continue}
+    vapid=vapid||await getVapid(env);
+    const codes=[];let why='';
+    for(const m of messagesFor(t.alerts,now)){
+      try{const x=await sendPush(t.p.cfg.sub,vapid,m);codes.push(x.status);if(x.text)why=x.text}
+      catch(e){codes.push(0);why=String(e&&e.message||e).slice(0,160)}
+    }
+    out.sent[t.p.id.slice(0,4)]=codes;
+    const last={t:now,codes,n:codes.length};if(why)last.why=why;
+    seenAll.u[t.p.id].last=last;wrote=true;
+    if(codes.some(c=>c===404||c===410)){t.p.cfg.sub=null;await env.KV.put('u:'+t.p.id,JSON.stringify(t.p.cfg))}
   }
-  out.codes=codes;
-  const gone=codes.some(c=>c===404||c===410);
-  res.seen.last={t:now,codes,n:codes.length};
-  if(why)res.seen.last.why=why;
-  await env.KV.put('seen',JSON.stringify(res.seen));
-  if(gone){cfg.sub=null;await env.KV.put('cfg',JSON.stringify(cfg))}
+  if(wrote)await env.KV.put('seen',JSON.stringify(seenAll));
   return out;
 }
 
@@ -582,7 +624,7 @@ async function tick(env,opts){
 function corsFor(req){
   const o=req.headers.get('Origin')||'';
   if(o===SITE||/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o))
-    return {'Access-Control-Allow-Origin':o,Vary:'Origin','Access-Control-Allow-Headers':'content-type,x-access','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Max-Age':'86400'};
+    return {'Access-Control-Allow-Origin':o,Vary:'Origin','Access-Control-Allow-Headers':'content-type,x-access,x-user','Access-Control-Allow-Methods':'GET,POST,OPTIONS','Access-Control-Max-Age':'86400'};
   return {};
 }
 const reply=(req,obj,status)=>new Response(JSON.stringify(obj),{status:status||200,headers:Object.assign({'content-type':'application/json','cache-control':'no-store'},corsFor(req))});
@@ -596,48 +638,64 @@ async function handle(req,env){
   const url=new URL(req.url),path=url.pathname.replace(/\/+$/,'')||'/';
   if(req.method==='OPTIONS')return new Response(null,{status:204,headers:corsFor(req)});
   if(path==='/'&&req.method==='GET')return new Response('Cover Watch alerts is running.',{headers:{'content-type':'text/plain'}});
-  if(!env.TOKEN)return reply(req,{ok:false,error:'The TOKEN variable is not set on the Worker.'},500);
-  if(!same(req.headers.get('x-access')||'',env.TOKEN))return reply(req,{ok:false,error:'Access code does not match.'},401);
+  if(!codesOf(env).length)return reply(req,{ok:false,error:'The TOKEN variable is not set on the Worker.'},500);
+  const code=await whichCode(env,req.headers.get('x-access')||'');
+  if(!code)return reply(req,{ok:false,error:'Access code does not match.'},401);
   if(!env.KV)return reply(req,{ok:false,error:'The Worker has no KV storage bound as KV.'},500);
+  const uid=req.headers.get('x-user')||'';
+  if(!UID.test(uid))return reply(req,{ok:false,error:'This version of Cover Watch is out of date. Close the app and open it again.'},400);
   const body=req.method==='POST'?await req.json().catch(()=>({})):{};
+  const key='u:'+uid;
   if(path==='/ping'){
     const v=await getVapid(env);
-    const cfg=await env.KV.get('cfg','json'),seen=await env.KV.get('seen','json');
-    return reply(req,{ok:true,vapid:v.pub,subscribed:!!(cfg&&cfg.sub),bets:cfg&&cfg.bets?cfg.bets.length:0,last:seen&&seen.last||null});
+    const cfg=await env.KV.get(key,'json'),seen=await env.KV.get('seen','json');
+    const mine=seen&&seen.u&&seen.u[uid];
+    return reply(req,{ok:true,vapid:v.pub,subscribed:!!(cfg&&cfg.sub),bets:cfg&&cfg.bets?cfg.bets.length:0,last:mine&&mine.last||null});
   }
   if(path==='/sync'){
-    const prevRaw=await env.KV.get('cfg');
+    const users=await readUsers(env);
+    const prevRaw=await env.KV.get(key);
     const prev=prevRaw?JSON.parse(prevRaw):{};
+    if(!prevRaw&&users.indexOf(uid)<0&&users.length>=MAX_USERS)return reply(req,{ok:false,error:'This helper already serves the most people it can ('+MAX_USERS+').'},409);
     const bets=(Array.isArray(body.bets)?body.bets:[]).slice(0,80).map(cleanBet).filter(Boolean);
     const sub=body.sub===undefined?prev.sub||null:(validSub(body.sub)?{endpoint:body.sub.endpoint,keys:{p256dh:body.sub.keys.p256dh,auth:body.sub.keys.auth}}:null);
     if(body.sub&&!sub)return reply(req,{ok:false,error:'That push subscription was not valid.'},400);
     const N=body.notif&&typeof body.notif==='object'?body.notif:prev.notif||{};
-    const next={v:1,sub,bets,notif:{on:N.on!==false,flip:N.flip!==false,score:N.score!==false,start:N.start!==false,final:N.final!==false}};
-    const s=JSON.stringify(next);
-    if(s!==prevRaw)await env.KV.put('cfg',s);
+    const next={v:2,code,sub,bets,notif:{on:N.on!==false,flip:N.flip!==false,score:N.score!==false,start:N.start!==false,final:N.final!==false}};
+    const same2=prevRaw&&JSON.stringify(Object.assign({},prev,{t:0}))===JSON.stringify(Object.assign({},next,{t:0}));
+    if(sub&&(!prev.sub||prev.sub.endpoint!==sub.endpoint)){
+      /* One phone belongs to one person. If this phone was signed up under another id, move it here. */
+      for(const other of users){
+        if(other===uid)continue;
+        const c=await env.KV.get('u:'+other,'json');
+        if(c&&c.sub&&c.sub.endpoint===sub.endpoint){c.sub=null;await env.KV.put('u:'+other,JSON.stringify(c))}
+      }
+    }
+    if(!same2)await env.KV.put(key,JSON.stringify(Object.assign(next,{t:Date.now()})));
+    if(users.indexOf(uid)<0)await env.KV.put('users',JSON.stringify(users.concat(uid)));
     return reply(req,{ok:true,bets:bets.length,subscribed:!!sub});
   }
   if(path==='/test'){
-    const cfg=await env.KV.get('cfg','json');
+    const cfg=await env.KV.get(key,'json');
     if(!cfg||!cfg.sub)return reply(req,{ok:false,error:'This phone is not signed up yet. Turn on lock-screen alerts first.'},409);
     const v=await getVapid(env);
     let x;
     try{x=await sendPush(cfg.sub,v,{title:'🟢 Cover Watch',body:'Lock-screen alerts are working.',tag:'test',t:Date.now()})}
     catch(e){return reply(req,{ok:false,error:'Could not reach the push service: '+String(e&&e.message||e)},502)}
     const status=x.status,good=status>=200&&status<300;
-    if(status===404||status===410){cfg.sub=null;await env.KV.put('cfg',JSON.stringify(cfg))}
+    if(status===404||status===410){cfg.sub=null;await env.KV.put(key,JSON.stringify(cfg))}
     if(good)return reply(req,{ok:true,status});
     const gone=status===404||status===410;
     return reply(req,{ok:false,status,error:gone?'This phone’s sign-up expired. Turn lock-screen alerts off and on again.':'The push service refused the message (status '+status+(x.text?': '+x.text:'')+').'},200);
   }
   if(path==='/presence'){
-    const prev=await env.KV.get('pres','json'),now=Date.now(),v=!!body.v;
-    if(!prev||prev.v!==v||now-prev.t>120000)await env.KV.put('pres',JSON.stringify({v,t:now}));
+    const prev=await env.KV.get('p:'+uid,'json'),now=Date.now(),v=!!body.v;
+    if(!prev||prev.v!==v||now-prev.t>120000)await env.KV.put('p:'+uid,JSON.stringify({v,t:now}));
     return reply(req,{ok:true});
   }
   if(path==='/off'){
-    const cfg=await env.KV.get('cfg','json');
-    if(cfg){cfg.sub=null;await env.KV.put('cfg',JSON.stringify(cfg))}
+    const cfg=await env.KV.get(key,'json');
+    if(cfg){cfg.sub=null;await env.KV.put(key,JSON.stringify(cfg))}
     return reply(req,{ok:true});
   }
   return reply(req,{ok:false,error:'Not found.'},404);
