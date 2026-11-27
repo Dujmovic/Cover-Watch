@@ -94,6 +94,19 @@ h1{margin:0;font:900 26px/1 var(--display);letter-spacing:.03em;text-transform:u
 
 main{flex:1;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
 .sec{display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 8px;font:700 12px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+/* Main-page section banners. Neutral colors only, so they are never mistaken for the green, amber and red status colors:
+   In play is a solid dark banner with a pulsing dot, Upcoming is a light outlined banner with a clock. */
+.sec.big{align-items:center;min-height:42px;margin:22px 0 10px;padding:0 12px 0 14px;border-radius:11px;font:800 21px/1 var(--display);letter-spacing:.08em}
+.sec.big:first-child{margin-top:14px}
+.sec.big .stt{display:inline-flex;align-items:center;gap:10px}
+.sec.big svg{width:19px;height:19px;flex:none}
+.sec.big .cnt{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:26px;padding:0 9px;border-radius:999px;font:800 15px/1 var(--display);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.sec.big .livedot{width:10px;height:10px}
+.sec-live{background:var(--ink);color:var(--bg)}
+.sec-live .livedot{background:var(--bg)}
+.sec-live .cnt{background:var(--bg);color:var(--ink)}
+.sec-soon{background:var(--card);color:var(--ink);border:1.5px solid var(--muted)}
+.sec-soon .cnt{background:var(--idle-bg);color:var(--ink)}
 .note{margin:0 0 10px;font-size:13px;color:var(--muted)}
 .warnbox{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:var(--push-bg);color:var(--ink);font-size:13px}
 .empty{margin:28px 0;text-align:center;color:var(--muted)}
@@ -1138,8 +1151,8 @@ function ticketEditor(it){
 /* ---------- render ---------- */
 let lastSig='',cache={},prevSt={},lastTiles='',lastNet='';
 const byStart=(x,y)=>x.start-y.start;
-function section(title,items,note){
-  return {title:title,note:note||'',items:items.map(it=>({key:it.b.id,html:cardHTML(it),st:it.e.st+it.e.phase}))};
+function section(title,items,note,kind){
+  return {title:title,kind:kind||'',note:note||'',items:items.map(it=>({key:it.b.id,html:cardHTML(it),st:it.e.st+it.e.phase}))};
 }
 function holdNet(it){
   const e=it.e;
@@ -1192,8 +1205,8 @@ function render(){
   const secs=[];
   const inPlay=real.filter(i=>i.e.phase==='live').sort(byStart);
   const upcoming=real.filter(i=>i.e.phase==='pre').sort(byStart);
-  if(inPlay.length)secs.push(section('In play · '+inPlay.length,inPlay));
-  if(upcoming.length)secs.push(section('Upcoming · '+upcoming.length,upcoming));
+  if(inPlay.length)secs.push(section('In play',inPlay,'','live'));
+  if(upcoming.length)secs.push(section('Upcoming',upcoming,'','soon'));
   if(samples.length)secs.push(section('Demo game · simulated',samples,'Five sample bets on a made-up game, including a 13-point teaser, so you can watch the colors change. They disappear when you add your first real bet.'));
   let empty='';
   if(!secs.length)empty=S.history.length
@@ -1202,12 +1215,15 @@ function render(){
   const warn=storageOK?'':'<p class="warnbox">This browser is not letting the app save anything, so bets will be lost when you close it. Open the app in a normal (not private) browser window.</p>';
   const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable. Settled bets move to History.<br>'
     +'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Show demo')+'</button></p>';
-  const sig=JSON.stringify([secs.map(s=>[s.title,s.note,s.items.map(i=>i.key)]),empty,fine,warn]);
+  const secHead=s=>s.kind
+    ?'<div class="sec big sec-'+s.kind+'" role="heading" aria-level="2"><span class="stt">'+(s.kind==='live'?'<span class="livedot" aria-hidden="true"></span>':I.clock)+esc(s.title)+'</span><span class="cnt">'+s.items.length+'</span></div>'
+    :'<div class="sec"><span>'+s.title+'</span></div>';
+  const sig=JSON.stringify([secs.map(s=>[s.title,s.kind,s.note,s.items.map(i=>i.key)]),empty,fine,warn]);
   const main=$('#main');
   const focusSel=focusSelector();
   let changed=false;
   if(sig!==lastSig){
-    main.innerHTML=warn+secs.map(s=>'<div class="sec"><span>'+s.title+'</span></div>'+(s.note?'<p class="note">'+s.note+'</p>':'')+s.items.map(i=>i.html).join('')).join('')+empty+fine;
+    main.innerHTML=warn+secs.map(s=>secHead(s)+(s.note?'<p class="note">'+s.note+'</p>':'')+s.items.map(i=>i.html).join('')).join('')+empty+fine;
     lastSig=sig;cache={};
     secs.forEach(s=>s.items.forEach(i=>{cache[i.key]=i.html;prevSt[i.key]=i.st}));
     changed=true;
