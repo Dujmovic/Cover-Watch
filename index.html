@@ -1147,10 +1147,30 @@ function holdNet(it){
   if(!(e.stake>0))return null;
   return e.st==='win'?e.win:e.st==='loss'?-e.stake:0;
 }
+/* Settled bets are shown only in History. A day after a bet settles (so late score corrections still reach it),
+   it is dropped from the hidden main list, which keeps storage and syncing small. The History record stays. */
+const TIDY_MS=24*3600*1000;
+function tidySettled(real){
+  const rec={};S.history.forEach(r=>{rec[r.id]=r});
+  const gone={};let n=0;
+  real.forEach(it=>{
+    if(it.e.phase!=='final')return;
+    const r=rec[it.b.id];
+    if(it.b.noLedger||(r&&Date.now()-(r.settledAt||0)>TIDY_MS)){gone[it.b.id]=1;n++}
+  });
+  if(!n)return real;
+  const keys=[];
+  S.bets.forEach(b=>{if(gone[b.id])legsOf(b).forEach(l=>keys.push(l.gameKey))});
+  S.bets=S.bets.filter(b=>!gone[b.id]);
+  cleanupGames(keys);
+  save();
+  return real.filter(it=>!gone[it.b.id]);
+}
 function render(){
-  const real=S.bets.map(b=>mk(b,false)).filter(Boolean);
+  let real=S.bets.map(b=>mk(b,false)).filter(Boolean);
   syncLedger(real);
   checkAlerts(real);
+  real=tidySettled(real);
   const samples=S.showSamples?SAMPLES.map(b=>mk(b,true)).filter(Boolean):[];
   const counted=real.length?real:samples;
   const liveC=counted.filter(i=>i.e.phase==='live');
@@ -1165,24 +1185,23 @@ function render(){
   if(liveC.length){
     netHTML=anyStake?'If scores hold: <b class="'+(net>0?'up':net<0?'down':'')+'">'+CW.smoney(net)+'</b>':liveC.length+' in play';
     if(up)netHTML+=' · '+up+' upcoming';
-  }else netHTML=counted.length?(up?'No bets in play · '+up+' upcoming':'No bets in play'):'No bets yet';
+  }else netHTML=(counted.length||S.history.length)?(up?'No bets in play · '+up+' upcoming':'No bets in play'):'No bets yet';
   if(real.length===0&&samples.length)netHTML='Demo: simulated game, sample bets · '+netHTML;
   if(netHTML!==lastNet){$('#net').innerHTML=netHTML;lastNet=netHTML}
 
   const secs=[];
   const inPlay=real.filter(i=>i.e.phase==='live').sort(byStart);
   const upcoming=real.filter(i=>i.e.phase==='pre').sort(byStart);
-  const settled=real.filter(i=>i.e.phase==='final').sort((x,y)=>-byStart(x,y));
   if(inPlay.length)secs.push(section('In play · '+inPlay.length,inPlay));
   if(upcoming.length)secs.push(section('Upcoming · '+upcoming.length,upcoming));
-  if(settled.length)secs.push(section('Settled · '+settled.length,settled));
   if(samples.length)secs.push(section('Demo game · simulated',samples,'Five sample bets on a made-up game, including a 13-point teaser, so you can watch the colors change. They disappear when you add your first real bet.'));
   let empty='';
-  if(!secs.length)empty='<div class="empty"><strong>No bets yet</strong>Add a bet to start tracking it.</div>';
+  if(!secs.length)empty=S.history.length
+    ?'<div class="empty"><strong>No bets in play</strong>Add a bet to start tracking it. Settled bets are in History.</div>'
+    :'<div class="empty"><strong>No bets yet</strong>Add a bet to start tracking it.</div>';
   const warn=storageOK?'':'<p class="warnbox">This browser is not letting the app save anything, so bets will be lost when you close it. Open the app in a normal (not private) browser window.</p>';
-  const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable. Settled bets are kept in History.<br>'
-    +'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Show demo')+'</button>'
-    +(settled.length?' · '+'<button type="button" data-a="clearSettled">Clear settled bets</button>':'')+'</p>';
+  const fine='<p class="fine">Tap a bet to enter a score yourself. Scores also update on their own when the live feed is reachable. Settled bets move to History.<br>'
+    +'<button type="button" data-a="demo">'+(S.showSamples?'Hide demo':'Show demo')+'</button></p>';
   const sig=JSON.stringify([secs.map(s=>[s.title,s.note,s.items.map(i=>i.key)]),empty,fine,warn]);
   const main=$('#main');
   const focusSel=focusSelector();
@@ -1255,13 +1274,6 @@ $('#main').addEventListener('click',ev=>{
     save();render();return;
   }
   if(a==='demo'){S.showSamples=!S.showSamples;save();render();return}
-  if(a==='clearSettled'){
-    const gone=[],keep=[];
-    S.bets.forEach(b=>{const it=mk(b,false);if(it&&it.e.phase==='final')gone.push(b);else keep.push(b)});
-    S.bets=keep;
-    gone.forEach(b=>cleanupGames(legsOf(b).map(l=>l.gameKey)));
-    save();render();
-  }
 });
 $('#main').addEventListener('keydown',ev=>{
   if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('.face[data-a="open"]')){ev.preventDefault();ev.target.click()}
@@ -1837,7 +1849,13 @@ $('#toasts').addEventListener('click',ev=>{
   const id=el.dataset.bet;el.remove();
   if(ev.target.closest('.tclose')||!id)return;
   const card=$('#main').querySelector('[data-key="'+id+'"]');
-  if(card)card.scrollIntoView({block:'center',behavior:'smooth'});
+  if(card){card.scrollIntoView({block:'center',behavior:'smooth'});return}
+  /* A settled bet has no card on the main page, so its alert opens it in History. */
+  if(scrim.hidden&&S.history.some(r=>r.id===id)){
+    openHist();hf.open=id;buildHist();
+    const row=$('#histBody').querySelector('[data-key="'+CSS.escape(id)+'"]');
+    if(row)row.scrollIntoView({block:'center'});
+  }
 });
 let AC=null;
 function unlockAudio(){
@@ -2062,7 +2080,7 @@ const fmtDate=ms=>{const d=new Date(ms);return (d.getFullYear()===new Date().get
 const c2=n=>Math.round(n*100)/100;
 const tmInfo=t=>({abbr:t.abbr,name:t.name,color:t.color||'',logo:t.logo||''});
 const scoreText=g=>g.away.abbr+' '+(g.away.score==null?0:g.away.score)+' @ '+g.home.abbr+' '+(g.home.score==null?0:g.home.score);
-/* A frozen copy of a settled bet. It keeps working after the bet is cleared or deleted from the main list. */
+/* A frozen copy of a settled bet. It keeps working after the bet is dropped from the main list. */
 function ledgerRec(it){
   const b=it.b,e=it.e,isT=isTk(b);
   const r={id:b.id,placed:b.created||0,kind:isT?b.kind:'single',odds:e.odds!=null?e.odds:b.odds,stake:Number(b.stake)||0,outcome:e.outcome,net:e.net==null?null:e.net};
@@ -2151,7 +2169,7 @@ function buildHist(){
   const segHTML=(h,label,opts,cur)=>'<div class="seg" role="group" aria-label="'+label+'">'+opts.map(o=>'<button type="button" data-h="'+h+'" data-v="'+o[0]+'" aria-pressed="'+(cur===o[0])+'">'+o[1]+'</button>').join('')+'</div>';
   let h='';
   if(!S.history.length){
-    h='<div class="hempty"><strong style="display:block;font:800 22px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin-bottom:4px">Nothing settled yet</strong>Bets land here on their own when their games finish, and stay even after you clear them from the main list.</div>';
+    h='<div class="hempty"><strong style="display:block;font:800 22px var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);margin-bottom:4px">Nothing settled yet</strong>Bets move here on their own when their games finish. They no longer show on the main page.</div>';
   }else{
     h+='<div class="hfilters">'+segHTML('period','Time period',[['all','All time'],['30','30 days'],['7','7 days']],hf.period)+segHTML('type','Bet kind',[['all','All'],['single','Singles'],['teaser','Teasers'],['parlay','Parlays']],hf.type)+'</div>';
     if(!list.length)h+='<div class="hempty">No settled bets in this view.</div>';
