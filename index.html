@@ -11,9 +11,10 @@
 <meta name="apple-mobile-web-app-title" content="Cover Watch">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="icon" type="image/png" href="icon-192.png?v=2">
 <title>Cover Watch</title>
+<meta name="cw-build" content="2026-11-27.4"><!-- bump this on every deploy; the app compares it to the live copy to offer an update -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Big+Shoulders+Display:wght@700;800;900&display=swap" rel="stylesheet">
@@ -120,6 +121,12 @@ main{flex:1;overflow-y:auto;padding:4px 16px 20px;overscroll-behavior:contain}
 .sec-live .cnt{background:var(--bg);color:var(--ink)}
 .sec-soon{background:var(--card);color:var(--ink);border:1.5px solid var(--muted)}
 .sec-soon .cnt{background:var(--idle-bg);color:var(--ink)}
+/* "New version ready" bar: shown when the live copy of the app is newer than the one that is open. */
+.upd{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 16px;background:var(--ink);color:var(--bg);font-size:14px;font-weight:600}
+.upd span{flex:1;min-width:0}
+.upd button{min-height:36px;border:0;border-radius:999px;font-weight:700}
+.upd #updGo{padding:0 16px;background:var(--bg);color:var(--ink)}
+.upd #updX{width:36px;background:transparent;color:inherit;font-size:20px;line-height:1}
 .note{margin:0 0 10px;font-size:13px;color:var(--muted)}
 .warnbox{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:var(--push-bg);color:var(--ink);font-size:13px}
 .empty{margin:28px 0;text-align:center;color:var(--muted)}
@@ -356,6 +363,7 @@ textarea.bk{width:100%;min-height:96px;padding:10px 12px;border-radius:12px;bord
     <div id="tiles" class="tiles" role="status" aria-live="polite"></div>
     <p id="net" class="net"></p>
   </header>
+  <div id="upd" class="upd" role="status" hidden><span>A new version of Cover Watch is ready.</span><button id="updGo" type="button">Update</button><button id="updX" type="button" aria-label="Dismiss">&times;</button></div>
   <main id="main" aria-label="Your bets"></main>
   <div class="dock"><button id="histBtn" class="secondary" type="button">History<span id="histCount"></span></button><button id="statsBtn" class="secondary" type="button">Stats</button><button id="addBtn" class="primary" type="button">Add a bet</button></div>
 </div>
@@ -2493,16 +2501,37 @@ function chartPick(ev){
 $('#statsBody').addEventListener('pointerdown',chartPick);
 $('#statsBody').addEventListener('pointermove',ev=>{if(ev.pointerType!=='mouse'||ev.buttons||ev.target.closest('.xchart'))chartPick(ev)});
 
+/* ---------- new version notice ---------- */
+/* An installed home-screen app can keep showing an old copy of the page. Compare this copy's build stamp (the cw-build meta tag)
+   with the live one and offer a reload when they differ. Checks at most every 5 minutes, only while the app is on screen. */
+const BUILD=(document.querySelector('meta[name="cw-build"]')||{}).content||'';
+const BUILD_RE=new RegExp('name="cw-build" content="([^"]+)"');
+let updAt=0,updShown=false;
+async function checkUpdate(force){
+  if(!BUILD||updShown||document.hidden)return;
+  if(!force&&Date.now()-updAt<5*60000)return;
+  updAt=Date.now();
+  try{
+    const r=await fetch('index.html?cb='+Date.now(),{cache:'no-store'});
+    if(!r.ok)return;
+    const m=(await r.text()).match(BUILD_RE);
+    if(m&&m[1]!==BUILD){updShown=true;$('#upd').hidden=false}
+  }catch(e){}
+}
+$('#updGo').addEventListener('click',()=>location.reload());
+$('#updX').addEventListener('click',()=>{$('#upd').hidden=true});
+
 /* ---------- start ---------- */
 render();
 setInterval(render,1000);
 document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden){awayFlag=awayFor();refresh().then(schedule)}
+  if(!document.hidden){awayFlag=awayFor();refresh().then(schedule);checkUpdate()}
   else{clearTimeout(pollT);try{localStorage.setItem(LS_AWAY,String(Date.now()))}catch(e){}}
   pushVisible();
 });
 refresh().then(schedule);
 pushVisible();
+setTimeout(()=>checkUpdate(true),4000);
 })();
 </script>
 </body>
